@@ -1,0 +1,24 @@
+{
+  "name": "@open-city-planner/analysis-areas",
+  "version": "1.0.0",
+  "description": "Analysis Areas Nuxt layer for Open City Planner",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "private": false,
+  "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46d7d9e20910fb0be1ab0fb5baa80dd621",
+  "scripts": {
+    "build": "node scripts/build-package.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "contract:check": "vitest run tests/module-contract.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  },
+  "files": [
+    "module.json",
+    "layer"
+  ]
+}

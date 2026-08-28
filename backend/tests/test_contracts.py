@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+import ast
+import json
+import re
+import zipfile
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+PACKAGE = ROOT / "backend/src/ocp_module_analysis_areas"
+
+EXPECTED_ROUTES = {
+    "",
+    "/geojson",
+    "/sitemap",
+    "/by-slug/{slug}",
+    "/by-slug/{slug}/preview.webp",
+    "/by-slug/{slug}/polygons",
+    "/by-slug/{slug}/statistics",
+    "/by-slug/{slug}/statistics/{metric_key}",
+    "/by-slug/{slug}/analytics",
+    "/by-slug/{slug}/comparison",
+    "/{area_id}",
+    "/{area_id}/analytics",
+    "/{area_id}/comparison",
+}
+
+LEGACY_IMPORT_BASELINE = {
+    "app.cache",
+    "app.core.config",
+    "app.db.session",
+    "app.models.user_polygon",
+    "app.schemas",
+    "app.services",
+}
+
+
+def _imports(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    result: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            result.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            result.add(node.module)
+    return result
+
+
+def test_manifest_and_package_versions_are_consistent() -> None:
+    manifest = yaml.safe_load((ROOT / "module.yaml").read_text(encoding="utf-8"))
+    pyproject = (ROOT / "backend/pyproject.toml").read_text(encoding="utf-8")
+    frontend = json.loads((ROOT / "frontend/module.json").read_text(encoding="utf-8"))
+    package = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
+    assert manifest["id"] == frontend["id"] == frontend["backendModuleId"] == "analysis-areas"
+    assert manifest["version"] == frontend["version"] == package["version"] == "1.0.0"
+    assert 'name = "ocp-module-analysis-areas"' in pyproject
+    assert 'version = "1.0.0"' in pyproject
+    assert manifest["backend"]["package"] == "ocp-module-analysis-areas"
+    assert manifest["frontend"]["package"] == "@open-city-planner/analysis-areas"
+
+
+def test_api_route_inventory_is_unchanged() -> None:
+    source = (PACKAGE / "api/router.py").read_text(encoding="utf-8")
+    actual = set(re.findall(r"@router\.get\(\s*[\"']([^\"']*)", source))
+    assert actual == EXPECTED_ROUTES
+    assert 'APIRouter(prefix="/analysis-areas"' in source
+    assert 'prefix="/api/v1"' in (PACKAGE / "module.py").read_text(encoding="utf-8")
+
+
+def test_no_new_host_internal_imports_escape_the_audited_adapter() -> None:
+    for source in PACKAGE.rglob("*.py"):
+        app_imports = {name for name in _imports(source) if name == "app" or name.startswith("app.")}
+        if source.name == "legacy.py" and source.parent.name == "integrations":
+            assert app_imports == LEGACY_IMPORT_BASELINE
+        else:
+            assert app_imports <= {"app.platform.modules.sdk"}, (source, app_imports)
+
+
+def test_historical_revision_ids_and_chain_links_are_immutable() -> None:
+    expected = {
+        "20260814_0014_analysis_areas.py": ("20260814_0014", "20260814_0013"),
+        "20260817_0023_area_wikidata.py": ("20260817_0023", "20260817_0022"),
+        "20260818_0025_osm_external_links.py": ("20260818_0025", "20260818_0024"),
+        "20260819_0032_optimize_area_poi_analytics.py": ("20260819_0032", "20260819_0031"),
+    }
+    history = PACKAGE / "migrations/history"
+    for filename, (revision, down_revision) in expected.items():
+        source = (history / filename).read_text(encoding="utf-8")
+        assert f'revision = "{revision}"' in source
+        assert f'down_revision = "{down_revision}"' in source
+    assert '"analysis_areas"' in (history / "20260814_0014_analysis_areas.py").read_text()
+    assert 'Geometry("MULTIPOLYGON", srid=4326' in (history / "20260814_0014_analysis_areas.py").read_text()
+
+
+def test_built_wheel_has_one_namespace_entry_point_and_migrations() -> None:
+    wheels = list((ROOT / "backend/dist").glob("*.whl"))
+    if not wheels:
+        return
+    assert len(wheels) == 1
+    with zipfile.ZipFile(wheels[0]) as archive:
+        names = archive.namelist()
+        roots = {name.split("/", 1)[0] for name in names}
+        assert roots == {
+            "ocp_module_analysis_areas",
+            "ocp_module_analysis_areas-1.0.0.dist-info",
+        }
+        entry_points = archive.read(
+            "ocp_module_analysis_areas-1.0.0.dist-info/entry_points.txt"
+        ).decode()
+        assert "[open_city_planner.modules]" in entry_points
+        assert "analysis-areas = ocp_module_analysis_areas.module:DEFINITION" in entry_points
+        assert any("migrations/history/20260814_0014" in name for name in names)
+        assert not any("/tests/" in name for name in names)

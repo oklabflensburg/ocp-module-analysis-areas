@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+host_root="${OCP_HOST_CHECKOUT:-$repo_root/.host-contract}"
+source="$host_root/backend/app/modules/analysis_areas"
+target="$repo_root/backend/src/ocp_module_analysis_areas"
+
+printf 'Host backend file -> standalone backend file\n'
+while IFS= read -r file; do
+  relative="${file#$source/}"
+  if [[ -f "$target/$relative" ]]; then state=present; else state=MISSING; fi
+  printf '%s -> %s [%s]\n' "$file" "$target/$relative" "$state"
+done < <(find "$source" -type f -name '*.py' | sort)
