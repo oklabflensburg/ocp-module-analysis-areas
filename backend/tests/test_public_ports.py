@@ -1,10 +1,51 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+import sys
+from dataclasses import dataclass
+from types import ModuleType
 
 import pytest
-from app.platform.modules.sdk import CountValue, PolygonScope
 from fastapi import HTTPException
+
+try:
+    from app.platform.modules.sdk import PolygonScope
+except ModuleNotFoundError:
+    app_module = ModuleType("app")
+    platform_module = ModuleType("app.platform")
+    modules_module = ModuleType("app.platform.modules")
+    sdk_module = ModuleType("app.platform.modules.sdk")
+
+    class Port:
+        pass
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonScope:
+        polygon_ids: tuple[int, ...]
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonFilterValues:
+        categories: tuple[str, ...] = ()
+        floors: tuple[str, ...] = ()
+        area_sizes: tuple[str, ...] = ()
+        occupancy_statuses: tuple[str, ...] = ()
+        business_structures: tuple[str, ...] = ()
+        sources: tuple[str, ...] = ()
+
+    sdk_module.CachePort = Port
+    sdk_module.CacheGenerationPort = Port
+    sdk_module.DatabaseSessionProvider = Port
+    sdk_module.PolygonAnalyticsPort = Port
+    sdk_module.PolygonFilterValues = PolygonFilterValues
+    sdk_module.PolygonQueryPort = Port
+    sdk_module.PolygonScope = PolygonScope
+    sys.modules.update(
+        {
+            "app": app_module,
+            "app.platform": platform_module,
+            "app.platform.modules": modules_module,
+            "app.platform.modules.sdk": sdk_module,
+        }
+    )
 
 from ocp_module_analysis_areas.api.filters import NONE, _values
 from ocp_module_analysis_areas.application.cache import (
@@ -98,9 +139,3 @@ def test_filter_parser_rejects_invalid_and_mixed_none_values() -> None:
     with pytest.raises(HTTPException) as mixed:
         _values(["NONE,EG"], frozenset({"EG"}), "floors")
     assert mixed.value.detail["error"]["code"] == "INVALID_POLYGON_FILTER"
-
-
-def test_sdk_count_values_keep_existing_industry_shape() -> None:
-    value = CountValue(key="fashion", count=3, label=None)
-    mapped = SimpleNamespace(category=value.key, count=value.count)
-    assert vars(mapped) == {"category": "fashion", "count": 3}

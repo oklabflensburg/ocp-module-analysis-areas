@@ -1,3 +1,3 @@
-from .router import create_router
+"""Analysis Areas HTTP API package."""
 
-__all__ = ["create_router"]
+__all__: list[str] = []

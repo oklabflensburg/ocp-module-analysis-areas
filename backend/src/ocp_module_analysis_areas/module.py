@@ -9,7 +9,7 @@ from app.platform.modules.sdk import (
     parse_manifest,
 )
 
-from .api import create_router
+from .api.router import create_router
 from .application import SqlAnalysisAreaQueryService
 from .contracts import SERVICE_ID, SERVICE_VERSION, AnalysisAreaQueryService
 from .persistence import METADATA
