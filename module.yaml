@@ -1,0 +1,24 @@
+manifest_version: 1
+id: analysis-areas
+name: Analysis Areas
+version: 1.0.0
+requires:
+  host: ">=0.2.0,<1.0.0"
+  sdk: ">=1.9.0,<2.0.0"
+  modules: {}
+optional:
+  modules: {}
+backend:
+  package: ocp-module-analysis-areas
+frontend:
+  package: "@open-city-planner/analysis-areas"
+capabilities:
+  - analysis-areas.public-api
+  - analysis-areas.lookup
+  - analysis-areas.geojson
+permissions: []
+config:
+  namespace: analysis-areas
+persistence:
+  schema: analysis_areas
+  migrations: true

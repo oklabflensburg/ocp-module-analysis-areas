@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+host_root="${OCP_HOST_CHECKOUT:-$repo_root/.host-contract}"
+host_python="$host_root/backend/.venv/bin/python"
+
+if [[ ! -x "$host_python" ]]; then
+  echo "Pinned host environment missing at $host_root; run scripts/prepare-host-contract first." >&2
+  exit 1
+fi
+
+expected="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$repo_root/.github/ocp-host-contract.json")"
+actual="$(git -C "$host_root" rev-parse HEAD)"
+if [[ "$actual" != "$expected" ]]; then
+  echo "Host contract mismatch: expected $expected, got $actual" >&2
+  exit 1
+fi
+
+source_commit="${SOURCE_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}"
+source_epoch="$(git -C "$repo_root" show -s --format=%ct "$source_commit" 2>/dev/null || git -C "$repo_root" show -s --format=%ct HEAD)"
+mkdir -p "$repo_root/dist"
+
+# Setuptools otherwise reuses removed package files from a previous build/lib tree.
+rm -rf "$repo_root/backend/build"
+(
+  cd "$repo_root/backend"
+  SOURCE_DATE_EPOCH="$source_epoch" uv build --wheel --clear
+)
+(
+  cd "$repo_root/frontend"
+  corepack pnpm build
+)
+(
+  cd "$host_root/backend"
+  "$host_python" -m app.cli.modules bundle build \
+    --manifest "$repo_root/module.yaml" \
+    --backend "$repo_root/backend/dist/ocp_module_analysis_areas-1.0.0-py3-none-any.whl" \
+    --frontend "$repo_root/frontend/dist/analysis-areas-1.0.0.tgz" \
+    --publisher oklabflensburg \
+    --source-reference releases/analysis-areas/1.0.0 \
+    --source-repository https://github.com/oklabflensburg/ocp-module-analysis-areas \
+    --source-commit "$source_commit" \
+    --source-tag v1.0.0 \
+    --build-workflow github-actions/module-release \
+    --license AGPL-3.0-only \
+    --output "$repo_root/dist/analysis-areas-1.0.0.ocp"
+)
+sha256sum "$repo_root/dist/analysis-areas-1.0.0.ocp" > "$repo_root/dist/analysis-areas-1.0.0.ocp.sha256"

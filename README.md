@@ -1,1 +1,120 @@
-# ocp-module-analysis-areas
+# Analysis Areas for Open City Planner
+
+Standalone full-stack OCP module extracted losslessly from the built-in
+`analysis-areas` module in
+[`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
+
+Version `1.0.0` is validated against host commit
+`81844b666aca8356f9c5cb9a86f00cf15b784f79` on
+`staging/epic-91-modular-host`. This repository is the future source of truth;
+the built-in remains in the host checkout and is excluded at composition time.
+
+## Contents
+
+- Python distribution `ocp-module-analysis-areas`, namespace
+  `ocp_module_analysis_areas`, entry point
+  `open_city_planner.modules / analysis-areas`;
+- Nuxt layer package `@open-city-planner/analysis-areas` with `/gebiete`, detail,
+  SEO/SSR, statistics, POI navigation and map contributions; module-owned UI
+  uses the public frontend SDK while unrelated compatibility sources stay unpackaged;
+- immutable copies of the relevant productive migration history;
+- preserved host characterization/E2E tests and standalone contract tests;
+- pinned host builder, verifier and lifecycle integration test.
+
+## Development
+
+Requirements are Python 3.12.14, uv 0.12.5, Node 22.23.2 and pnpm 11.22.0.
+
+```bash
+cd backend
+uv sync --frozen --extra dev
+uv run ruff check src tests
+uv run pytest
+uv build --wheel
+
+cd ../frontend
+corepack pnpm install --frozen-lockfile
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm build
+```
+
+Prepare and test the exact host contract:
+
+```bash
+scripts/prepare-host-contract
+scripts/build-bundle
+scripts/host-contract-test
+```
+
+The resulting files are `dist/analysis-areas-1.0.0.ocp` and its `.sha256`.
+The `.ocp` is built by the pinned host's v1 builder, not by repository-local ZIP
+code.
+
+## Installation and cutover
+
+Select the external owner through the shared host composition setting:
+
+```bash
+cd open-city-planner/backend
+export OCP_EXCLUDED_BUILTIN_MODULES=analysis-areas
+uv run python -m app.cli.modules verify analysis-areas-1.0.0.ocp
+uv run python -m app.cli.modules install analysis-areas-1.0.0.ocp
+uv run python -m app.cli.modules enable analysis-areas
+```
+
+Install defaults to disabled. Disable/re-enable preserves the installed wheel,
+frontend package, tables and packaged migration history.
+
+`scripts/host-contract-test` uses the normal Host CLI, installer, first-party and
+entry-point discovery, generated `modules env`, frontend discovery, typecheck and
+production build. The Built-in backend and frontend stay on disk and are excluded
+only by `OCP_EXCLUDED_BUILTIN_MODULES`. Only the four duplicate Host Alembic files
+are omitted from an isolated test copy for the exclusive-ownership graph check.
+
+## Compatibility
+
+The backend requires Module SDK `>=1.9.0,<2.0.0`. It receives the database,
+module-scoped cache, cache generations, public-query policy, map preview,
+polygon query/analytics and statistics capabilities exclusively through its
+`ModuleContext`. The installable Python package has no private Host imports.
+Analysis-Areas-specific schemas, filter parsing, cache keys and the spatial POI
+query remain module-owned.
+
+Existing Alembic IDs and their host-chain `down_revision` links are not renamed.
+The module declares all four IDs explicitly through the SDK 1.9 adoption contract;
+future migrations must use `mod_analysis_areas_*` and extend the then-current
+global head. No baseline table creation, graph rewrite, or data copy was introduced.
+The lifecycle test removes duplicate built-in migration sources only in its
+isolated cutover copy and validates passive discovery while installation is disabled.
+
+Detailed evidence:
+
+- [file parity](docs/file-parity.md)
+- [test parity](docs/test-parity.md)
+- [migration inventory](docs/migration-inventory.md)
+- [import inventory](docs/import-inventory.md)
+- [functional parity](docs/functional-parity.md)
+
+## Host pin updates
+
+`.github/ocp-host-contract.json` is the only pin source. Update it only to a
+reviewed full commit SHA, rerun every standalone and host-contract gate, update
+the extraction/parity notes if contracts changed, and commit the pin together
+with those results. Never point CI at a branch name.
+
+## Release
+
+Tag `v1.0.0` must equal manifest, backend and frontend version. The release job
+reruns all gates, builds the `.ocp`, calculates SHA-256 and refuses to mutate an
+existing release. Release note: “First standalone release extracted from Open
+City Planner built-in module.”
+
+## Cutover preconditions
+
+Do not remove the built-in until standalone CI, v1.0.0 release, registry artifact
+verification, install/lifecycle, migration and existing-data compatibility, API,
+frontend and E2E parity are confirmed. Never activate built-in and external
+`analysis-areas` simultaneously.
+
+License: AGPL-3.0-only. OpenStreetMap-derived data remains subject to ODbL.

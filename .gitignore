@@ -1,0 +1,11 @@
+backend/.venv/
+backend/build/
+backend/dist/
+backend/src/*.egg-info/
+frontend/node_modules/
+frontend/dist/
+dist/
+.host-contract/
+.pytest_cache/
+*.pyc
+__pycache__/
