@@ -230,6 +230,12 @@ def main() -> None:
         copy_cutover_host(host, cutover_host)
         cutover_backend = cutover_host / "backend"
         cutover_frontend = cutover_host / "frontend"
+        builtin_detail_map = (
+            cutover_frontend
+            / "app/components/analysis/AnalysisAreaDetailMap.vue"
+        )
+        builtin_detail_map.unlink()
+        assert not builtin_detail_map.exists()
         install_root = root / "modules"
         base_environment = {
             "ENABLED_MODULES": "",
@@ -422,6 +428,18 @@ def main() -> None:
             enabled_environment["OCP_INSTALLED_FRONTEND_MODULE_ROOTS"]
         )
         assert (installed_frontend_root / "analysis-areas/module.json").is_file()
+        installed_detail_map = (
+            installed_frontend_root
+            / "analysis-areas/layer/app/components/analysis/AnalysisAreaDetailMap.vue"
+        )
+        assert installed_detail_map.is_file()
+        installed_detail_route = (
+            installed_frontend_root
+            / "analysis-areas/layer/app/pages/gebiete/[slug].vue"
+        ).read_text(encoding="utf-8")
+        assert "../../components/analysis/AnalysisAreaDetailMap.vue" in installed_detail_route
+        assert "@ready=\"mapReady = true\"" in installed_detail_route
+        assert "data-social-preview-ready" in installed_detail_route
 
         # Both backend and frontend must fail fast without explicit source ownership.
         duplicate_backend = run(
@@ -493,6 +511,7 @@ def main() -> None:
             "installed-package import guard; "
             "exclusive ownership; duplicate fail-fast; normal CLI enable/disable/re-enable; "
             "backend/API characterization and frontend route/map discovery; "
+            "built-in-free detail-map ownership and social-preview ready wiring; "
             "modules:check; typecheck; build; "
             f"head={EXPECTED_HEAD}; sha256={verified_package['bundle_sha256']}"
         )

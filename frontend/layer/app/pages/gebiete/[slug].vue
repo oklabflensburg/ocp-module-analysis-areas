@@ -139,6 +139,7 @@
 </template>
 
 <script setup lang="ts">
+import AnalysisAreaDetailMap from '../../components/analysis/AnalysisAreaDetailMap.vue'
 import {
   areaPoiMapLink,
   getIndustryColor,

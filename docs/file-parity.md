@@ -30,6 +30,9 @@ public-contract-compatible, so they now ship in the installable layer:
 - `AreaStatistics.vue` through `OcpStatusBadge`;
 - `ExternalSourceLink.vue` through `ExternalProvider` and `OcpProviderIcon`;
 - `AreaExternalLinks.vue`, which composes the module-owned external-link UI.
+- `AnalysisAreaDetailMap.vue`, which owns the standalone detail-map instance and
+  uses the public style, HTTP and cursor ports. Its direct MapLibre runtime import
+  is declared by the frontend package at the Host-compatible `6.4.1` version.
 
 The manifest now declares the map runtime, map-layer controls and selection
 presentation contributions. `/gebiete` and `/gebiete/:slug` remain the two
@@ -41,14 +44,13 @@ These preserved sources are not included in the npm package:
 
 | Files | Classification | Reason |
 | --- | --- | --- |
-| `AnalysisAreaDetailMap.vue` | Teilweise öffentlich, noch Host-private | Style, HTTP and cursor use public ports, but the component still imports `maplibre-gl` directly; installed layers outside the Host tree cannot resolve that private build dependency. |
 | `ComparableList.vue`, `PolygonStatistics.vue` | Fachlich nicht Analysis-Areas-owned | Polygon/comparison stores, types, routes and OSM polygon details belong to neighboring domains. |
 | `DistributionCharts.vue`, `FastFacts.vue`, `FastFactsEditor.vue`, `IndustryChart.vue`, `MarketBenchmarks.vue`, `RentTable.vue` | Noch Host-private und fachlich Analytics/administration-owned | They depend on private analytics, filter, map, OSM or administration stores and shared chart/metric utilities. Copying those domains would falsely relabel ownership. |
 | `LocationAnalysis.vue` | Noch Host-private and polygon-analysis-owned | It consumes the Host API client and `~/types/analytics`, not an Analysis Areas public port. |
 | `ViewportOsmSummary.vue` | Noch Host-private and OSM-owned | It depends on the private OSM viewport store and Host industry/OSM label utilities. |
 
 No remaining file became safely movable merely through the new cutover setting.
-The five public-contract-compatible, module-owned components listed above were
+The six public-contract-compatible, module-owned components listed above were
 moved; no Analytics, Polygon, OSM, notification or comparison implementation was
 copied or renamed as Analysis Areas code.
 

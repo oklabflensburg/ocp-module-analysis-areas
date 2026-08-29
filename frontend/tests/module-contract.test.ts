@@ -1,10 +1,15 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const definition = JSON.parse(readFileSync(`${root}/module.json`, 'utf8'))
 const source = (path: string) => readFileSync(`${root}/${path}`, 'utf8')
+const layerSources = (directory = `${root}/layer`): string[] => readdirSync(directory)
+  .flatMap(entry => {
+    const path = `${directory}/${entry}`
+    return statSync(path).isDirectory() ? layerSources(path) : /\.(?:vue|[cm]?[jt]s)$/.test(path) ? [path] : []
+  })
 
 describe('Analysis Areas frontend module contract', () => {
   it('preserves identity, routes, navigation and map contributions', () => {
@@ -39,6 +44,34 @@ describe('Analysis Areas frontend module contract', () => {
     ]) expect(detail).toContain(value)
     expect(detail).toContain('Externe Quellen')
     expect(detail).toContain('OpenStreetMap')
+    expect(detail).toContain("import AnalysisAreaDetailMap from '../../components/analysis/AnalysisAreaDetailMap.vue'")
+    expect(detail).toContain('<AnalysisAreaDetailMap v-if="previewMap" :area="area" @ready="mapReady = true" />')
+    expect(detail).toContain("const previewReady = computed(() => !previewMap.value || mapReady.value)")
+  })
+
+  it('packages the module-owned detail map without a Host component fallback', () => {
+    const detailMapPath = 'layer/app/components/analysis/AnalysisAreaDetailMap.vue'
+    expect(existsSync(`${root}/${detailMapPath}`)).toBe(true)
+    expect(existsSync(`${root}/host-compatibility/app/components/analysis/AnalysisAreaDetailMap.vue`)).toBe(false)
+    const detailMap = source(detailMapPath)
+    expect(detailMap).toContain("import('maplibre-gl')")
+    expect(detailMap).toContain('useMapStylePort()')
+    expect(detailMap).toContain('useModuleHttp()')
+    expect(detailMap).toContain("emit('ready')")
+    expect(detailMap).toContain('onMounted(async () =>')
+    expect(detailMap).toContain('onBeforeUnmount(() =>')
+    expect(detailMap).toContain('resizeObserver?.disconnect()')
+    expect(detailMap).toContain('map.value?.remove()')
+    expect(detailMap).not.toContain('resolveComponent')
+  })
+
+  it('declares every direct runtime import and rejects private Host imports', () => {
+    const packageDefinition = JSON.parse(source('package.json'))
+    expect(packageDefinition.dependencies).toMatchObject({ 'maplibre-gl': '6.4.1' })
+    for (const path of layerSources()) {
+      const contents = readFileSync(path, 'utf8')
+      expect(contents, path).not.toMatch(/from\s+['"](?:~\/|@\/)(?:stores|utils|types|composables)\//)
+    }
   })
 
   it('keeps the map runtime isolated from MapCanvas', () => {

@@ -9,7 +9,8 @@ Backend Module SDK `1.9.0`.
 | `persistence/models.py` | SQLAlchemy/GeoAlchemy | module-owned persistence models and metadata |
 | API schemas and filter parser | Pydantic/FastAPI | module-owned response and HTTP contracts |
 | Nuxt layer | `#frontend-module-sdk`, `#frontend-module-sdk/ui` | public frontend contracts |
-| remaining compatibility sources | private frontend stores/types/components | excluded from the installable frontend package; see `file-parity.md` |
+| Detail map | `maplibre-gl` 6.4.1 | direct declared package dependency; style, HTTP and cursor remain public Host ports |
+| remaining compatibility sources | private frontend stores/types/components owned by Analytics, Polygon, OSM and neighboring domains | excluded from the installable frontend package; see `file-parity.md` |
 
 The former `integrations/legacy.py` adapter was deleted. Its replacements are:
 
