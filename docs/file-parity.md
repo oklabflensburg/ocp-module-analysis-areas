@@ -1,6 +1,6 @@
 # File parity
 
-Source commit: `b8c4db7f3246d21c53a1b5633915be16bb84a633`.
+Source commit: `7580f8e89a324c227d3bf294dec46505e446889c`.
 
 ## Backend
 
@@ -26,10 +26,12 @@ Historical migrations map from `backend/alembic/versions/<revision>.py` to
 `frontend/module.json`; all files under its `layer/` map to `frontend/layer/`.
 Additionally, the complete `frontend/app/components/analysis/` directory plus
 `useAnalysisAreaApi.ts`, `useAnalysisAreaSeo.ts`, `analysisAreas.ts`, and
-`analysisArea.ts` are retained. Files accepted by the public module import guard
-live in the installable layer. Files that still require private host primitives
-live under `frontend/host-compatibility/` and are deliberately excluded from the
-artifact until the corresponding public frontend contracts exist.
+`analysisArea.ts` are retained. After frontend SDK 1.4 made map selection,
+filtering, and module HTTP access public, `analysisAreas.ts` moved from
+`frontend/host-compatibility/` into the installable layer and the map runtime now
+uses those public ports. Remaining files that still require private host
+primitives stay under `frontend/host-compatibility/` and are excluded from the
+artifact until corresponding public contracts exist.
 
 ## Intentionally host-only
 

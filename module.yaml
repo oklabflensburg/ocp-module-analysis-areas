@@ -4,7 +4,7 @@ name: Analysis Areas
 version: 1.0.0
 requires:
   host: ">=0.2.0,<1.0.0"
-  sdk: ">=1.7.0,<2.0.0"
+  sdk: ">=1.8.0,<2.0.0"
   modules: {}
 optional:
   modules: {}
@@ -19,4 +19,4 @@ capabilities:
 permissions: []
 persistence:
   schema: analysis_areas
-  migrations: false
+  migrations: true

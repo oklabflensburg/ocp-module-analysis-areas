@@ -1,6 +1,6 @@
 # Migration inventory
 
-Source: `open-city-planner@b8c4db7f3246d21c53a1b5633915be16bb84a633`.
+Source: `open-city-planner@7580f8e89a324c227d3bf294dec46505e446889c`.
 The files under `ocp_module_analysis_areas/migrations/history` are immutable
 copies; no revision ID, `down_revision`, table, column, constraint, index, SRID,
 or backfill was rewritten.
@@ -16,15 +16,20 @@ The Statistics revision `20260816_0016` creates `statistics_*` tables with FKs
 to `analysis_areas`. It remains intentionally host/Statistics-owned and is listed
 in the parity report rather than relabeled as Analysis Areas persistence.
 
-## Runtime status
+## Adoption contract
 
-The current host module migration coordinator requires new external revisions to
-use the `mod_analysis_areas_` namespace and to form one global linear chain.
-Renaming these released host revisions would break existing databases, while
-registering a new create-all baseline would duplicate production tables. The
-standalone manifest therefore retains the existing adoption contract
-(`schema: analysis_areas`, `migrations: false`) and packages the immutable history
-as audit/upgrade resources. The host continues to own execution of these existing
-chain nodes until a follow-up contract supports adopted historical revisions.
+The standalone module declares these exact IDs in
+`ModuleMigrationSource.adopted_revisions` and exposes `migrations/history` from
+the installed `ocp_module_analysis_areas` package. Its manifest consequently sets
+`persistence.migrations: true`. This transfers source ownership without renaming
+revisions, rewriting graph edges, introducing a baseline, or changing the single
+global Alembic version table.
 
-This is a known cutover prerequisite, not a new schema or a hidden migration.
+All future revisions use the `mod_analysis_areas_` namespace. A future revision
+such as `mod_analysis_areas_0001` must extend the global Alembic head that exists
+when it is authored; it must not automatically point to `20260819_0032` merely
+because that is the last adopted Analysis Areas revision.
+
+The host retains its built-in copies until the separate #188 runtime/source
+cutover. Providing both copies to one coordinator is intentionally a fail-fast
+duplicate-revision error, not a supported success state.

@@ -3,6 +3,7 @@
 from app.platform.modules.sdk import (
     ModuleContext,
     ModuleDefinition,
+    ModuleMigrationSource,
     ModulePersistenceContribution,
     parse_manifest,
 )
@@ -18,7 +19,7 @@ MANIFEST = parse_manifest(
         "id": "analysis-areas",
         "name": "Analysis Areas",
         "version": "1.0.0",
-        "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.7.0,<2.0.0"},
+        "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.8.0,<2.0.0"},
         "backend": {"package": "ocp-module-analysis-areas"},
         "frontend": {"package": "@open-city-planner/analysis-areas"},
         "capabilities": [
@@ -26,7 +27,7 @@ MANIFEST = parse_manifest(
             "analysis-areas.lookup",
             "analysis-areas.geojson",
         ],
-        "persistence": {"schema": "analysis_areas", "migrations": False},
+        "persistence": {"schema": "analysis_areas", "migrations": True},
     },
     origin=__name__,
 )
@@ -58,6 +59,19 @@ DEFINITION = ModuleDefinition(
         module_id=MANIFEST.id,
         metadata=METADATA,
         schema="analysis_areas",
+        migration_source=ModuleMigrationSource(
+            package="ocp_module_analysis_areas",
+            resource="migrations/history",
+            revision_namespace="mod_analysis_areas",
+            adopted_revisions=frozenset(
+                {
+                    "20260814_0014",
+                    "20260817_0023",
+                    "20260818_0025",
+                    "20260819_0032",
+                }
+            ),
+        ),
         adopted_tables=frozenset({"analysis_areas"}),
     ),
 )

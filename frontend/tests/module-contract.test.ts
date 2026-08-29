@@ -13,7 +13,8 @@ describe('Analysis Areas frontend module contract', () => {
       id: 'analysis-areas',
       version: '1.0.0',
       backendModuleId: 'analysis-areas',
-      layer: 'layer'
+      layer: 'layer',
+      compatibility: { sdk: '>=1.4.0 <2.0.0' }
     })
     expect(definition.publicContributions.routes.map((route: { path: string }) => route.path))
       .toEqual(['/gebiete', '/gebiete/:slug'])
@@ -40,10 +41,17 @@ describe('Analysis Areas frontend module contract', () => {
 
   it('keeps the map runtime isolated from MapCanvas', () => {
     const runtime = source('layer/app/components/AnalysisAreasMapRuntime.vue')
+    const store = source('layer/app/stores/analysisAreas.ts')
     expect(runtime).toContain("moduleId: 'analysis-areas'")
     expect(runtime).toContain("context.interactions.register")
     expect(runtime).toContain("context.featureInfo.register")
+    expect(runtime).toContain('context.selection.registerPresentation')
+    expect(runtime).toContain('context.selection.reveal()')
     expect(runtime).toContain("route.query.gebiet")
     expect(runtime).toContain("setData(areas.featureCollection)")
+    expect(runtime).not.toContain('useMapStore')
+    expect(store).toContain('useModuleHttp')
+    expect(store).toContain('useMapFilterPort')
+    expect(store).not.toContain("from '~/")
   })
 })

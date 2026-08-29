@@ -3,8 +3,10 @@
 </template>
 
 <script setup lang="ts">
-import type { MapContext, MapFeatureInfoProvider } from '#frontend-module-sdk'
-import { useMapContext } from '#frontend-module-sdk'
+import type { MapContext, MapFeatureInfoProvider, MapSelectionPresentation } from '#frontend-module-sdk'
+import { useMapContext, useMapFilterPort } from '#frontend-module-sdk'
+import { onBeforeUnmount, watch } from 'vue'
+import { useAnalysisAreasStore } from '../stores/analysisAreas'
 
 interface RenderedAreaFeature {
   readonly id?: string | number
@@ -14,11 +16,12 @@ interface RenderedAreaFeature {
 
 const mapContext = useMapContext()
 const areas = useAnalysisAreasStore()
-const mapStore = useMapStore()
-const mapSelection = useMapSelection()
 const route = useRoute()
+const filter = useMapFilterPort()
+const filterQuery = computed(() => filter.toQuery().toString())
 let unregisterInteraction: (() => void) | undefined
 let unregisterFeatureInfo: (() => void) | undefined
+let unregisterPresentation: (() => void) | undefined
 
 const layerIds = [
   'analysis-areas.quarter-fill',
@@ -35,6 +38,14 @@ const featureInfo: MapFeatureInfoProvider = {
     name: String(selection.properties?.name || 'Analysegebiet'),
     areaType: String(selection.properties?.area_type || '')
   })
+}
+
+const presentation: MapSelectionPresentation = {
+  id: 'analysis-areas.selection',
+  moduleId: 'analysis-areas',
+  canPresent: selection => selection.moduleId === 'analysis-areas',
+  present: selection => areas.presentSelection(String(selection.featureId)),
+  clear: () => areas.clearSelection()
 }
 
 function source(context: MapContext) {
@@ -85,7 +96,7 @@ function fitFeature(context: MapContext, feature: RenderedAreaFeature) {
 async function selectFeature(feature: RenderedAreaFeature, context: MapContext) {
   const id = String(feature.properties?.id || feature.id || '')
   if (!id) return
-  await context.selection.select({
+  const request = context.selection.select({
     moduleId: 'analysis-areas',
     sourceId: 'analysis-areas.data',
     layerId: String((feature.properties?.area_type || 'area')).toLowerCase(),
@@ -93,8 +104,9 @@ async function selectFeature(feature: RenderedAreaFeature, context: MapContext) 
     properties: feature.properties,
     geometry: feature.geometry
   })
-  const request = mapSelection.selectAnalysisArea(id)
-  if (window.matchMedia('(max-width: 1279px)').matches) mapStore.openGisPanel('selection')
+  if (import.meta.client && window.matchMedia('(max-width: 1279px)').matches) {
+    context.selection.reveal()
+  }
   await request
 }
 
@@ -114,6 +126,7 @@ async function register(context: MapContext) {
   await areas.load()
   updateSource(context)
   updateVisibility(context)
+  unregisterPresentation = context.selection.registerPresentation(presentation)
   unregisterFeatureInfo = context.featureInfo.register(featureInfo)
   unregisterInteraction = context.interactions.register({
     id: 'analysis-areas.select',
@@ -134,8 +147,10 @@ async function register(context: MapContext) {
 watch(mapContext, (context) => {
   unregisterInteraction?.()
   unregisterFeatureInfo?.()
+  unregisterPresentation?.()
   unregisterInteraction = undefined
   unregisterFeatureInfo = undefined
+  unregisterPresentation = undefined
   if (context) void register(context)
 }, { immediate: true })
 
@@ -147,6 +162,10 @@ watch(() => areas.visibility, () => {
   if (mapContext.value) updateVisibility(mapContext.value)
 }, { deep: true })
 
+watch(filterQuery, () => {
+  if (areas.selectedAreaId) void areas.loadDetails()
+})
+
 watch(() => [route.query.gebiet, route.query.area], () => {
   if (mapContext.value) void selectRequestedArea(mapContext.value)
 })
@@ -154,5 +173,6 @@ watch(() => [route.query.gebiet, route.query.area], () => {
 onBeforeUnmount(() => {
   unregisterInteraction?.()
   unregisterFeatureInfo?.()
+  unregisterPresentation?.()
 })
 </script>

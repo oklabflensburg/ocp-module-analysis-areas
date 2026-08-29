@@ -1,1 +1,4 @@
-"""Packaged historical migration resources for the Analysis Areas domain."""
+"""Module-owned history, including explicitly adopted host revisions.
+
+Future namespaced revisions must extend the then-current global Alembic head.
+"""

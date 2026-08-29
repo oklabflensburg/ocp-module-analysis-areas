@@ -59,6 +59,8 @@ def test_manifest_and_package_versions_are_consistent() -> None:
     assert 'version = "1.0.0"' in pyproject
     assert manifest["backend"]["package"] == "ocp-module-analysis-areas"
     assert manifest["frontend"]["package"] == "@open-city-planner/analysis-areas"
+    assert manifest["requires"]["sdk"] == ">=1.8.0,<2.0.0"
+    assert manifest["persistence"]["migrations"] is True
 
 
 def test_api_route_inventory_is_unchanged() -> None:
@@ -86,10 +88,24 @@ def test_historical_revision_ids_and_chain_links_are_immutable() -> None:
         "20260819_0032_optimize_area_poi_analytics.py": ("20260819_0032", "20260819_0031"),
     }
     history = PACKAGE / "migrations/history"
+    assert {path.name for path in history.glob("*.py")} == {"__init__.py", *expected}
     for filename, (revision, down_revision) in expected.items():
         source = (history / filename).read_text(encoding="utf-8")
-        assert f'revision = "{revision}"' in source
-        assert f'down_revision = "{down_revision}"' in source
+        assignments = {
+            node.targets[0].id: ast.literal_eval(node.value)
+            for node in ast.parse(source, filename=filename).body
+            if isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id
+            in {"revision", "down_revision", "branch_labels", "depends_on"}
+        }
+        assert assignments == {
+            "revision": revision,
+            "down_revision": down_revision,
+            "branch_labels": None,
+            "depends_on": None,
+        }
     assert '"analysis_areas"' in (history / "20260814_0014_analysis_areas.py").read_text()
     assert 'Geometry("MULTIPOLYGON", srid=4326' in (history / "20260814_0014_analysis_areas.py").read_text()
 
@@ -111,5 +127,35 @@ def test_built_wheel_has_one_namespace_entry_point_and_migrations() -> None:
         ).decode()
         assert "[open_city_planner.modules]" in entry_points
         assert "analysis-areas = ocp_module_analysis_areas.module:DEFINITION" in entry_points
-        assert any("migrations/history/20260814_0014" in name for name in names)
+        for revision in (
+            "20260814_0014",
+            "20260817_0023",
+            "20260818_0025",
+            "20260819_0032",
+        ):
+            assert sum(f"migrations/history/{revision}" in name for name in names) == 1
         assert not any("/tests/" in name for name in names)
+
+
+def test_persistence_definition_declares_exact_historical_adoption() -> None:
+    tree = ast.parse((PACKAGE / "module.py").read_text(encoding="utf-8"))
+    migration_sources = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "ModuleMigrationSource"
+    ]
+    assert len(migration_sources) == 1
+    keywords = {keyword.arg: keyword.value for keyword in migration_sources[0].keywords}
+    assert ast.literal_eval(keywords["package"]) == "ocp_module_analysis_areas"
+    assert ast.literal_eval(keywords["resource"]) == "migrations/history"
+    assert ast.literal_eval(keywords["revision_namespace"]) == "mod_analysis_areas"
+    adopted_call = keywords["adopted_revisions"]
+    assert isinstance(adopted_call, ast.Call)
+    assert ast.literal_eval(adopted_call.args[0]) == {
+        "20260814_0014",
+        "20260817_0023",
+        "20260818_0025",
+        "20260819_0032",
+    }
