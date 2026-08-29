@@ -1,6 +1,6 @@
 # Migration inventory
 
-Source: `open-city-planner@7580f8e89a324c227d3bf294dec46505e446889c`.
+Source: `open-city-planner@5e0357952ea1e8cac56076f64ec975530e6ab019`.
 The files under `ocp_module_analysis_areas/migrations/history` are immutable
 copies; no revision ID, `down_revision`, table, column, constraint, index, SRID,
 or backfill was rewritten.
@@ -30,6 +30,7 @@ such as `mod_analysis_areas_0001` must extend the global Alembic head that exist
 when it is authored; it must not automatically point to `20260819_0032` merely
 because that is the last adopted Analysis Areas revision.
 
-The host retains its built-in copies until the separate #188 runtime/source
-cutover. Providing both copies to one coordinator is intentionally a fail-fast
-duplicate-revision error, not a supported success state.
+The pinned host still retains its built-in migration copies. Providing both copies
+to one coordinator is intentionally a fail-fast duplicate-revision error. The
+contract test removes only those four files from an isolated Alembic test copy to
+prove the final exclusive-ownership graph; no host checkout file is changed.

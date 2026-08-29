@@ -20,7 +20,9 @@ describe('Analysis Areas frontend module contract', () => {
       .toEqual(['/gebiete', '/gebiete/:slug'])
     expect(definition.publicContributions.ui).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'analysis-areas.primary-navigation', to: '/gebiete' }),
-      expect.objectContaining({ id: 'analysis-areas.map-runtime', slot: 'map.controls' })
+      expect.objectContaining({ id: 'analysis-areas.map-runtime', slot: 'map.controls' }),
+      expect.objectContaining({ id: 'analysis-areas.map-layers', slot: 'map.layers' }),
+      expect.objectContaining({ id: 'analysis-areas.map-selection', slot: 'map.selection' })
     ]))
     expect(definition.publicContributions.map.sources.map((item: { id: string }) => item.id))
       .toEqual(['analysis-areas.data'])
@@ -53,5 +55,7 @@ describe('Analysis Areas frontend module contract', () => {
     expect(store).toContain('useModuleHttp')
     expect(store).toContain('useMapFilterPort')
     expect(store).not.toContain("from '~/")
+    expect(source('layer/app/components/AnalysisAreaCard.vue')).toContain('useMapSelectionPort')
+    expect(source('layer/app/components/analysis/ExternalSourceLink.vue')).toContain('OcpProviderIcon')
   })
 })

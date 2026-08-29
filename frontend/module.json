@@ -33,6 +33,22 @@
         "component": "AnalysisAreasMapRuntime",
         "source": "layer/app/components/AnalysisAreasMapRuntime.vue",
         "accessibleLabel": "Analysegebiete auf der Karte"
+      },
+      {
+        "id": "analysis-areas.map-layers",
+        "slot": "map.layers",
+        "priority": 10,
+        "visibility": { "module": "analysis-areas" },
+        "component": "AnalysisAreasLayerControls",
+        "source": "layer/app/components/AnalysisAreasLayerControls.vue"
+      },
+      {
+        "id": "analysis-areas.map-selection",
+        "slot": "map.selection",
+        "priority": 10,
+        "visibility": { "module": "analysis-areas" },
+        "component": "AnalysisAreaCard",
+        "source": "layer/app/components/AnalysisAreaCard.vue"
       }
     ],
     "map": {

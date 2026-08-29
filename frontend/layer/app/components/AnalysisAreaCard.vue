@@ -7,12 +7,12 @@
         <p v-if="area.parent_name" class="mt-1 text-xs text-slate-500">in {{ area.parent_name }}</p>
       </div>
       <button v-if="!embedded" class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg text-slate-500 hover:bg-slate-100" type="button" aria-label="Gebietsauswahl schließen" @click="clearSelection">
-        <X class="size-4" aria-hidden="true" />
+        <span class="text-xl leading-none" aria-hidden="true">×</span>
       </button>
     </div>
 
     <div v-if="store.detailsLoading" class="mt-4 flex items-center gap-2 text-sm text-slate-500" role="status">
-      <LoaderCircle class="size-4 animate-spin" /> Analyse wird berechnet …
+      <span class="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" /> Analyse wird berechnet …
     </div>
     <template v-else-if="store.analytics">
       <dl class="mt-4 grid grid-cols-2 gap-2">
@@ -46,11 +46,12 @@
 </template>
 
 <script setup lang="ts">
-import { LoaderCircle, X } from '@lucide/vue'
-import type { AnalysisAreaType, AreaStatisticValue } from '../../types/analysisArea'
+import type { AnalysisAreaType, AreaStatisticValue } from '../types/analysisArea'
+import { useAnalysisAreasStore } from '../stores/analysisAreas'
+import { useMapSelectionPort } from '#frontend-module-sdk'
 
 const store = useAnalysisAreasStore()
-const mapSelection = useMapSelection()
+const mapSelection = useMapSelectionPort()
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 const embedded = computed(() => props.embedded)
 const area = computed(() => store.selectedArea)
@@ -78,6 +79,6 @@ function typeLabel(type: AnalysisAreaType) {
   return ({ MUNICIPALITY: 'Gemeinde', DISTRICT: 'Stadtteil', QUARTER: 'Quartier' })[type]
 }
 function clearSelection() {
-  mapSelection.clearSelection()
+  mapSelection.clear()
 }
 </script>

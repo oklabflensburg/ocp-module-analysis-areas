@@ -5,10 +5,9 @@ Standalone full-stack OCP module extracted losslessly from the built-in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
 Version `1.0.0` is validated against host commit
-`7580f8e89a324c227d3bf294dec46505e446889c` on
+`5e0357952ea1e8cac56076f64ec975530e6ab019` on
 `staging/epic-91-modular-host`. This repository is the future source of truth;
-the built-in remains in the host until the explicit cutover and is not deleted by
-this issue.
+the built-in remains in the host checkout and is excluded at composition time.
 
 ## Contents
 
@@ -16,8 +15,8 @@ this issue.
   `ocp_module_analysis_areas`, entry point
   `open_city_planner.modules / analysis-areas`;
 - Nuxt layer package `@open-city-planner/analysis-areas` with `/gebiete`, detail,
-  SEO/SSR, statistics, POI navigation and map contributions, plus explicitly
-  retained host-compatibility components pending public SDK contracts;
+  SEO/SSR, statistics, POI navigation and map contributions; module-owned UI
+  uses the public frontend SDK while unrelated compatibility sources stay unpackaged;
 - immutable copies of the relevant productive migration history;
 - preserved host characterization/E2E tests and standalone contract tests;
 - pinned host builder, verifier and lifecycle integration test.
@@ -54,10 +53,11 @@ code.
 
 ## Installation and cutover
 
-After the built-in with the same ID has been removed from host discovery:
+Select the external owner through the shared host composition setting:
 
 ```bash
 cd open-city-planner/backend
+export OCP_EXCLUDED_BUILTIN_MODULES=analysis-areas
 uv run python -m app.cli.modules verify analysis-areas-1.0.0.ocp
 uv run python -m app.cli.modules install analysis-areas-1.0.0.ocp
 uv run python -m app.cli.modules enable analysis-areas
@@ -66,11 +66,11 @@ uv run python -m app.cli.modules enable analysis-areas
 Install defaults to disabled. Disable/re-enable preserves the installed wheel,
 frontend package, tables and packaged migration history.
 
-The pinned host currently rejects `verify` before inspecting the package whenever
-the built-in ID still exists. `scripts/host-contract-test` therefore models the
-documented cutover in a scoped test: it removes only built-in discovery, then runs
-the real host verifier/installer and enable/disable/re-enable preflights. It always
-restores the checkout.
+`scripts/host-contract-test` uses the normal Host CLI, installer, first-party and
+entry-point discovery, generated `modules env`, frontend discovery, typecheck and
+production build. The Built-in backend and frontend stay on disk and are excluded
+only by `OCP_EXCLUDED_BUILTIN_MODULES`. Only the four duplicate Host Alembic files
+are omitted from an isolated test copy for the exclusive-ownership graph check.
 
 ## Compatibility and known prerequisites
 
@@ -84,8 +84,8 @@ Existing Alembic IDs and their host-chain `down_revision` links are not renamed.
 The module declares all four IDs explicitly through the SDK 1.8 adoption contract;
 future migrations must use `mod_analysis_areas_*` and extend the then-current
 global head. No baseline table creation, graph rewrite, or data copy was introduced.
-The temporary host/module duplicate remains deliberately invalid until #188 removes
-the built-in migration copies from the host source.
+The temporary host/module migration duplicate remains deliberately invalid until
+the built-in migration copies leave the host source.
 
 Detailed evidence:
 
