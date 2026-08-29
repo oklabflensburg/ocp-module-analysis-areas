@@ -45,6 +45,8 @@ describe('Analysis Areas frontend module contract', () => {
     expect(detail).toContain('Externe Quellen')
     expect(detail).toContain('OpenStreetMap')
     expect(detail).toContain("import AnalysisAreaDetailMap from '../../components/analysis/AnalysisAreaDetailMap.vue'")
+    expect(detail).toContain("route.query['social-preview'] === '1'")
+    expect(detail).toContain("route.query.map !== '0'")
     expect(detail).toContain('<AnalysisAreaDetailMap v-if="previewMap" :area="area" @ready="mapReady = true" />')
     expect(detail).toContain("const previewReady = computed(() => !previewMap.value || mapReady.value)")
   })
