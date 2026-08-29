@@ -1,9 +1,18 @@
-"""Analysis Areas queries plus isolated compatibility queries for legacy domains."""
+"""Analysis Areas persistence and application queries."""
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import asdict
 from urllib.parse import quote
 
+from app.platform.modules.sdk import (
+    CacheGenerationPort,
+    CachePort,
+    PolygonAnalyticsPort,
+    PolygonFilterValues,
+    PolygonQueryPort,
+    PolygonScope,
+)
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,30 +25,18 @@ from ocp_module_analysis_areas.api.schemas import (
     AnalysisAreaRead,
     AnalysisAreaReference,
     AnalysisAreaSitemapEntry,
+    BenchmarkMetrics,
+    CompletenessMetric,
+    DimensionCount,
+    IndustryCount,
     MetricDifference,
+    WikidataExternalLink,
+    WikipediaExternalLink,
 )
 from ocp_module_analysis_areas.persistence.models import AnalysisArea, PolygonAnalysisArea
 
-from ..integrations.legacy import (
-    AREA_POI_CATEGORY_SQL,
-    IndustryCount,
-    UserPolygon,
-    WikidataExternalLink,
-    WikipediaExternalLink,
-    build_cache_key,
-    cache_service,
-    cache_version,
-    get_settings,
-)
-from ..integrations.legacy import (
-    base_filters as _base_filters,
-)
-from ..integrations.legacy import (
-    benchmark_metrics as _benchmark_metrics,
-)
-from ..integrations.legacy import (
-    counts as _counts,
-)
+from ..settings import AnalysisAreasSettings
+from .cache import cache_key, get_or_compute
 
 AREA_SELECT = text("""
 SELECT area.uuid::text AS id, area.slug, area.name, area.area_type, parent.uuid::text AS parent_id,
@@ -58,6 +55,16 @@ osm.tags ? 'shop'
 OR osm.tags ? 'amenity'
 OR osm.tags ? 'tourism'
 OR osm.tags ? 'leisure'
+"""
+
+AREA_POI_CATEGORY_SQL = """
+coalesce(
+  tags->>'shop',
+  tags->>'amenity',
+  tags->>'tourism',
+  tags->>'leisure',
+  'other'
+)
 """
 
 # ST_PointOnSurface(osm.geometry) ist kein Ausdruck des GiST-Indexes auf geometry.
@@ -166,15 +173,14 @@ async def _area_detail_by_slug_uncached(session: AsyncSession, slug: str) -> Ana
     )
 
 
-async def _areas_geojson_uncached(session: AsyncSession, *, limit: int | None = None) -> dict:
-    effective_limit = min(limit or get_settings().public_polygon_response_limit, get_settings().public_polygon_response_limit)
+async def _areas_geojson_uncached(session: AsyncSession, *, limit: int) -> dict:
     rows = (await session.execute(text("""
       SELECT uuid::text AS id, slug, name, area_type, parent_id, area_m2, source,
              source_osm_type, source_osm_id, source_admin_level,
              ST_AsGeoJSON(geometry,6)::json AS geometry
       FROM analysis_areas ORDER BY CASE area_type WHEN 'MUNICIPALITY' THEN 1 WHEN 'DISTRICT' THEN 2 ELSE 3 END,name
       LIMIT :limit
-    """), {"limit": effective_limit})).mappings().all()
+    """), {"limit": limit})).mappings().all()
     return {"type": "FeatureCollection", "features": [
         {"type": "Feature", "id": row["id"], "geometry": row["geometry"],
          "properties": {key: value for key, value in row.items() if key != "geometry"}}
@@ -182,28 +188,78 @@ async def _areas_geojson_uncached(session: AsyncSession, *, limit: int | None = 
     ]}
 
 
-def _filters(area_db_id: int, *, categories: Sequence[str], floors: Sequence[str], area_sizes: Sequence[str], occupancy_statuses: Sequence[str], business_structures: Sequence[str], sources: Sequence[str]) -> list[object]:
-    result = _base_filters(floors, area_sizes, occupancy_statuses, business_structures, sources)
-    result.append(UserPolygon.id.in_(select(PolygonAnalysisArea.polygon_id).where(PolygonAnalysisArea.analysis_area_id == area_db_id)))
-    if categories:
-        result.append(UserPolygon.category.in_(categories))
-    return result
+def _filter_values(**kwargs: Sequence[str]) -> PolygonFilterValues:
+    return PolygonFilterValues(**{key: tuple(value) for key, value in kwargs.items()})
+
+
+async def polygon_scope(session: AsyncSession, area_db_id: int) -> PolygonScope:
+    polygon_ids = (
+        await session.scalars(
+            select(PolygonAnalysisArea.polygon_id)
+            .where(PolygonAnalysisArea.analysis_area_id == area_db_id)
+            .order_by(PolygonAnalysisArea.polygon_id)
+        )
+    ).all()
+    return PolygonScope(tuple(dict.fromkeys(polygon_ids)))
+
+
+def _metrics(value) -> BenchmarkMetrics:
+    scalar_values = asdict(value)
+    for field in (
+        "size_distribution",
+        "floor_distribution",
+        "status_distribution",
+        "business_structure_distribution",
+        "data_completeness",
+    ):
+        scalar_values.pop(field)
+    return BenchmarkMetrics(
+        **scalar_values,
+        size_distribution=[
+            DimensionCount(key=item.key, label=item.label or item.key, count=item.count)
+            for item in value.size_distribution
+        ],
+        floor_distribution=[
+            DimensionCount(key=item.key, label=item.label or item.key, count=item.count)
+            for item in value.floor_distribution
+        ],
+        status_distribution=[
+            DimensionCount(key=item.key, label=item.label or item.key, count=item.count)
+            for item in value.status_distribution
+        ],
+        business_structure_distribution=[
+            DimensionCount(key=item.key, label=item.label or item.key, count=item.count)
+            for item in value.business_structure_distribution
+        ],
+        data_completeness=[
+            CompletenessMetric(**asdict(item)) for item in value.data_completeness
+        ],
+    )
 
 
 async def _area_row(session: AsyncSession, area_id: uuid.UUID) -> tuple[AnalysisArea, AnalysisAreaRead] | None:
     model = await session.scalar(select(AnalysisArea).where(AnalysisArea.uuid == area_id))
-    detail = await area_detail(session, area_id)
+    detail = await _area_detail_uncached(session, area_id)
     return (model, detail) if model and detail else None
 
 
-async def _area_analytics_uncached(session: AsyncSession, area_id: uuid.UUID, **kwargs) -> AnalysisAreaAnalytics | None:
+async def _area_analytics_uncached(
+    session: AsyncSession,
+    polygon_analytics: PolygonAnalyticsPort,
+    area_id: uuid.UUID,
+    **kwargs,
+) -> AnalysisAreaAnalytics | None:
     found = await _area_row(session, area_id)
     if not found:
         return None
     area, detail = found
-    selected_filters = _filters(area.id, **kwargs)
-    metrics = await _benchmark_metrics(session, selected_filters)
-    distribution = await _counts(session, selected_filters)
+    scope = await polygon_scope(session, area.id)
+    selected_filters = _filter_values(**kwargs)
+    metrics = _metrics(await polygon_analytics.metrics(session, scope, selected_filters))
+    distribution = [
+        IndustryCount(category=item.key, count=item.count)
+        for item in await polygon_analytics.category_counts(session, scope, selected_filters)
+    ]
     poi_categories: list[IndustryCount] = []
     if not kwargs["sources"] or "OSM" in kwargs["sources"]:
         poi_categories = await _area_poi_categories(session, area.id)
@@ -213,7 +269,12 @@ async def _area_analytics_uncached(session: AsyncSession, area_id: uuid.UUID, **
                                  retail_area_density_m2_per_km2=round(density, 2) if density is not None else None)
 
 
-async def _area_comparison_uncached(session: AsyncSession, area_id: uuid.UUID, **kwargs) -> AnalysisAreaComparison | None:
+async def _area_comparison_uncached(
+    session: AsyncSession,
+    polygon_analytics: PolygonAnalyticsPort,
+    area_id: uuid.UUID,
+    **kwargs,
+) -> AnalysisAreaComparison | None:
     found = await _area_row(session, area_id)
     if not found:
         return None
@@ -223,11 +284,20 @@ async def _area_comparison_uncached(session: AsyncSession, area_id: uuid.UUID, *
     )
     if municipality is None:
         return None
-    municipality_detail = await area_detail(session, municipality.uuid)
+    municipality_detail = await _area_detail_uncached(session, municipality.uuid)
     if municipality_detail is None:
         return None
-    area_metrics = await _benchmark_metrics(session, _filters(area.id, **kwargs))
-    city_metrics = await _benchmark_metrics(session, _filters(municipality.id, **kwargs))
+    selected_filters = _filter_values(**kwargs)
+    area_metrics = _metrics(
+        await polygon_analytics.metrics(
+            session, await polygon_scope(session, area.id), selected_filters
+        )
+    )
+    city_metrics = _metrics(
+        await polygon_analytics.metrics(
+            session, await polygon_scope(session, municipality.id), selected_filters
+        )
+    )
     differences = []
     for key, unit in (("polygon_count", "absolute"), ("total_area_m2", "m²"), ("average_area_m2", "m²"),
                       ("vacancy_rate", "percentage_points"), ("chain_store_rate", "percentage_points")):
@@ -241,79 +311,95 @@ async def _area_comparison_uncached(session: AsyncSession, area_id: uuid.UUID, *
 
 async def list_areas(
     session: AsyncSession,
+    cache: CachePort,
+    generations: CacheGenerationPort,
+    settings: AnalysisAreasSettings,
     area_type: str | None = None,
     parent_id: uuid.UUID | None = None,
 ) -> list[AnalysisAreaRead]:
-    version = await cache_version(session, "analysis-areas")
-    key = build_cache_key(
-        "analysis-area:list", {"area_type": area_type, "parent_id": parent_id}, version=version
+    version = await generations.current(session, "analysis-areas")
+    key = cache_key(
+        "list", {"area_type": area_type, "parent_id": parent_id}, generation=str(version)
     )
 
     async def compute() -> list[dict]:
         rows = await _list_areas_uncached(session, area_type, parent_id)
         return [row.model_dump(mode="json") for row in rows]
 
-    data, _status = await cache_service.get_or_compute(
-        key, ttl=get_settings().analysis_area_cache_ttl, resource="analysis-area-list", compute=compute
+    data = await get_or_compute(
+        cache, key, ttl_seconds=settings.analysis_area_cache_ttl, compute=compute
     )
     return [AnalysisAreaRead.model_validate(row) for row in data]
 
 
-async def area_detail(session: AsyncSession, area_id: uuid.UUID) -> AnalysisAreaRead | None:
-    version = await cache_version(session, "analysis-areas")
-    key = build_cache_key("analysis-area:detail", {"area_id": area_id}, version=version)
+async def area_detail(
+    session: AsyncSession,
+    cache: CachePort,
+    generations: CacheGenerationPort,
+    settings: AnalysisAreasSettings,
+    area_id: uuid.UUID,
+) -> AnalysisAreaRead | None:
+    version = await generations.current(session, "analysis-areas")
+    key = cache_key("detail", {"area_id": area_id}, generation=str(version))
 
     async def compute() -> dict | None:
         result = await _area_detail_uncached(session, area_id)
         return result.model_dump(mode="json") if result else None
 
-    data, _status = await cache_service.get_or_compute(
-        key, ttl=get_settings().analysis_area_cache_ttl, resource="analysis-area-detail", compute=compute
+    data = await get_or_compute(
+        cache, key, ttl_seconds=settings.analysis_area_cache_ttl, compute=compute
     )
     return AnalysisAreaRead.model_validate(data) if data else None
 
 
-async def area_detail_by_slug(session: AsyncSession, slug: str) -> AnalysisAreaDetail | None:
-    version = await cache_version(session, "analysis-areas")
-    key = build_cache_key("analysis-area:detail-by-slug", {"slug": slug}, version=version)
+async def area_detail_by_slug(
+    session: AsyncSession,
+    cache: CachePort,
+    generations: CacheGenerationPort,
+    settings: AnalysisAreasSettings,
+    slug: str,
+) -> AnalysisAreaDetail | None:
+    version = await generations.current(session, "analysis-areas")
+    key = cache_key("detail-by-slug", {"slug": slug}, generation=str(version))
 
     async def compute() -> dict | None:
         result = await _area_detail_by_slug_uncached(session, slug)
         return result.model_dump(mode="json") if result else None
 
-    data, _status = await cache_service.get_or_compute(
-        key, ttl=get_settings().analysis_area_cache_ttl,
-        resource="analysis-area-detail-by-slug", compute=compute,
+    data = await get_or_compute(
+        cache, key, ttl_seconds=settings.analysis_area_cache_ttl, compute=compute
     )
     return AnalysisAreaDetail.model_validate(data) if data else None
 
 
-async def area_polygons_by_slug(session: AsyncSession, slug: str, limit: int = 8) -> list[AnalysisAreaPolygon] | None:
-    area_version = await cache_version(session, "analysis-areas")
-    analytics_version = await cache_version(session, "analytics")
-    key = build_cache_key(
-        "analysis-area:polygons-by-slug", {"slug": slug, "limit": limit},
-        version=f"{area_version}:{analytics_version}",
+async def area_polygons_by_slug(
+    session: AsyncSession,
+    cache: CachePort,
+    generations: CacheGenerationPort,
+    settings: AnalysisAreasSettings,
+    polygons: PolygonQueryPort,
+    slug: str,
+    limit: int = 8,
+) -> list[AnalysisAreaPolygon] | None:
+    area_version = await generations.current(session, "analysis-areas")
+    analytics_version = await generations.current(session, "analytics")
+    key = cache_key(
+        "polygons-by-slug",
+        {"slug": slug, "limit": limit},
+        generation=f"{area_version}:{analytics_version}",
     )
 
     async def compute() -> list[dict] | None:
         area_id = await session.scalar(select(AnalysisArea.id).where(AnalysisArea.slug == slug))
         if area_id is None:
             return None
-        rows = (await session.execute(text("""
-          SELECT polygon.uuid::text AS id, polygon.slug, polygon.name, polygon.category, polygon.floor,
-            polygon.address_display_name, coalesce(polygon.occupancy_status,'UNKNOWN') AS occupancy_status,
-            ST_Area(ST_Transform(polygon.geometry,25832)) AS area_m2
-          FROM polygon_analysis_areas assignment
-          JOIN user_polygons polygon ON polygon.id=assignment.polygon_id
-          WHERE assignment.analysis_area_id=:area_id
-          ORDER BY polygon.updated_at DESC,polygon.id DESC LIMIT :limit
-        """), {"area_id": area_id, "limit": limit})).mappings().all()
-        return [AnalysisAreaPolygon(**dict(row)).model_dump(mode="json") for row in rows]
+        values = await polygons.list_by_scope(
+            session, await polygon_scope(session, area_id), limit=limit
+        )
+        return [AnalysisAreaPolygon(**asdict(value)).model_dump(mode="json") for value in values]
 
-    data, _status = await cache_service.get_or_compute(
-        key, ttl=get_settings().analytics_cache_ttl,
-        resource="analysis-area-polygons-by-slug", compute=compute,
+    data = await get_or_compute(
+        cache, key, ttl_seconds=settings.analytics_cache_ttl, compute=compute
     )
     return [AnalysisAreaPolygon.model_validate(row) for row in data] if data is not None else None
 
@@ -331,50 +417,68 @@ async def area_uuid_by_slug(session: AsyncSession, slug: str) -> uuid.UUID | Non
     return await session.scalar(select(AnalysisArea.uuid).where(AnalysisArea.slug == slug))
 
 
-async def areas_geojson(session: AsyncSession, *, limit: int | None = None) -> dict:
-    effective_limit = min(limit or get_settings().public_polygon_response_limit, get_settings().public_polygon_response_limit)
-    version = await cache_version(session, "analysis-areas")
-    key = build_cache_key("analysis-area:geojson", {"limit": effective_limit}, version=version)
-    data, _status = await cache_service.get_or_compute(
+async def areas_geojson(
+    session: AsyncSession,
+    cache: CachePort,
+    generations: CacheGenerationPort,
+    settings: AnalysisAreasSettings,
+    *,
+    limit: int,
+) -> dict:
+    version = await generations.current(session, "analysis-areas")
+    key = cache_key("geojson", {"limit": limit}, generation=str(version))
+    data = await get_or_compute(
+        cache,
         key,
-        ttl=get_settings().analysis_area_cache_ttl,
-        resource="analysis-area-geojson",
-        compute=lambda: _areas_geojson_uncached(session, limit=effective_limit),
+        ttl_seconds=settings.analysis_area_cache_ttl,
+        compute=lambda: _areas_geojson_uncached(session, limit=limit),
     )
     return data
 
 
 async def area_analytics(
-    session: AsyncSession, area_id: uuid.UUID, **kwargs
+    session: AsyncSession,
+    cache: CachePort,
+    generations: CacheGenerationPort,
+    settings: AnalysisAreasSettings,
+    polygon_analytics: PolygonAnalyticsPort,
+    area_id: uuid.UUID,
+    **kwargs,
 ) -> AnalysisAreaAnalytics | None:
-    version = await cache_version(session, "analytics")
-    key = build_cache_key(
-        "analysis-area:analytics", {"area_id": area_id, **kwargs}, version=version
+    version = await generations.current(session, "analytics")
+    key = cache_key(
+        "analytics", {"area_id": area_id, **kwargs}, generation=str(version)
     )
 
     async def compute() -> dict | None:
-        result = await _area_analytics_uncached(session, area_id, **kwargs)
+        result = await _area_analytics_uncached(session, polygon_analytics, area_id, **kwargs)
         return result.model_dump(mode="json") if result else None
 
-    data, _status = await cache_service.get_or_compute(
-        key, ttl=get_settings().analytics_cache_ttl, resource="analysis-area-analytics", compute=compute
+    data = await get_or_compute(
+        cache, key, ttl_seconds=settings.analytics_cache_ttl, compute=compute
     )
     return AnalysisAreaAnalytics.model_validate(data) if data else None
 
 
 async def area_comparison(
-    session: AsyncSession, area_id: uuid.UUID, **kwargs
+    session: AsyncSession,
+    cache: CachePort,
+    generations: CacheGenerationPort,
+    settings: AnalysisAreasSettings,
+    polygon_analytics: PolygonAnalyticsPort,
+    area_id: uuid.UUID,
+    **kwargs,
 ) -> AnalysisAreaComparison | None:
-    version = await cache_version(session, "analytics")
-    key = build_cache_key(
-        "analysis-area:comparison", {"area_id": area_id, **kwargs}, version=version
+    version = await generations.current(session, "analytics")
+    key = cache_key(
+        "comparison", {"area_id": area_id, **kwargs}, generation=str(version)
     )
 
     async def compute() -> dict | None:
-        result = await _area_comparison_uncached(session, area_id, **kwargs)
+        result = await _area_comparison_uncached(session, polygon_analytics, area_id, **kwargs)
         return result.model_dump(mode="json") if result else None
 
-    data, _status = await cache_service.get_or_compute(
-        key, ttl=get_settings().analytics_cache_ttl, resource="analysis-area-comparison", compute=compute
+    data = await get_or_compute(
+        cache, key, ttl_seconds=settings.analytics_cache_ttl, compute=compute
     )
     return AnalysisAreaComparison.model_validate(data) if data else None

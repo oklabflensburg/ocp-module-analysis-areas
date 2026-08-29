@@ -1,6 +1,6 @@
 # Migration inventory
 
-Source: `open-city-planner@5e0357952ea1e8cac56076f64ec975530e6ab019`.
+Source: `open-city-planner@81844b666aca8356f9c5cb9a86f00cf15b784f79`.
 The files under `ocp_module_analysis_areas/migrations/history` are immutable
 copies; no revision ID, `down_revision`, table, column, constraint, index, SRID,
 or backfill was rewritten.

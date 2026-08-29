@@ -27,16 +27,6 @@ EXPECTED_ROUTES = {
     "/{area_id}/comparison",
 }
 
-LEGACY_IMPORT_BASELINE = {
-    "app.cache",
-    "app.core.config",
-    "app.db.session",
-    "app.models.user_polygon",
-    "app.schemas",
-    "app.services",
-}
-
-
 def _imports(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     result: set[str] = set()
@@ -59,8 +49,21 @@ def test_manifest_and_package_versions_are_consistent() -> None:
     assert 'version = "1.0.0"' in pyproject
     assert manifest["backend"]["package"] == "ocp-module-analysis-areas"
     assert manifest["frontend"]["package"] == "@open-city-planner/analysis-areas"
-    assert manifest["requires"]["sdk"] == ">=1.8.0,<2.0.0"
+    assert manifest["requires"]["sdk"] == ">=1.9.0,<2.0.0"
     assert manifest["persistence"]["migrations"] is True
+
+
+def test_host_contract_is_exact_sdk_1_9_merge() -> None:
+    contract = json.loads(
+        (ROOT / ".github/ocp-host-contract.json").read_text(encoding="utf-8")
+    )
+    assert contract == {
+        "repository": "https://github.com/oklabflensburg/open-city-planner.git",
+        "commit": "81844b666aca8356f9c5cb9a86f00cf15b784f79",
+        "source_branch": "staging/epic-91-modular-host",
+        "sdk_version": "1.9.0",
+        "host_version": "0.2.0",
+    }
 
 
 def test_api_route_inventory_is_unchanged() -> None:
@@ -71,13 +74,12 @@ def test_api_route_inventory_is_unchanged() -> None:
     assert 'prefix="/api/v1"' in (PACKAGE / "module.py").read_text(encoding="utf-8")
 
 
-def test_no_new_host_internal_imports_escape_the_audited_adapter() -> None:
+def test_installable_package_only_imports_the_public_host_sdk() -> None:
     for source in PACKAGE.rglob("*.py"):
         app_imports = {name for name in _imports(source) if name == "app" or name.startswith("app.")}
-        if source.name == "legacy.py" and source.parent.name == "integrations":
-            assert app_imports == LEGACY_IMPORT_BASELINE
-        else:
-            assert app_imports <= {"app.platform.modules.sdk"}, (source, app_imports)
+        assert app_imports <= {"app.platform.modules.sdk"}, (source, app_imports)
+    assert not (PACKAGE / "integrations/legacy.py").exists()
+    assert not (PACKAGE / "application/legacy_sync.py").exists()
 
 
 def test_historical_revision_ids_and_chain_links_are_immutable() -> None:
@@ -135,6 +137,7 @@ def test_built_wheel_has_one_namespace_entry_point_and_migrations() -> None:
         ):
             assert sum(f"migrations/history/{revision}" in name for name in names) == 1
         assert not any("/tests/" in name for name in names)
+        assert not any("legacy" in name for name in names)
 
 
 def test_persistence_definition_declares_exact_historical_adoption() -> None:

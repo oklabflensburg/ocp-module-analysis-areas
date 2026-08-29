@@ -4,7 +4,7 @@ name: Analysis Areas
 version: 1.0.0
 requires:
   host: ">=0.2.0,<1.0.0"
-  sdk: ">=1.8.0,<2.0.0"
+  sdk: ">=1.9.0,<2.0.0"
   modules: {}
 optional:
   modules: {}
@@ -17,6 +17,8 @@ capabilities:
   - analysis-areas.lookup
   - analysis-areas.geojson
 permissions: []
+config:
+  namespace: analysis-areas
 persistence:
   schema: analysis_areas
   migrations: true

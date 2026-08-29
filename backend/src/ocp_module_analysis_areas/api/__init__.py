@@ -1,3 +1,3 @@
-from .router import router
+from .router import create_router
 
-__all__ = ["router"]
+__all__ = ["create_router"]

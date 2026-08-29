@@ -1,22 +1,15 @@
 # File parity
 
-Pinned Host: `open-city-planner@5e0357952ea1e8cac56076f64ec975530e6ab019`
-(merge commit of Host PR #191).
+Pinned Host: `open-city-planner@81844b666aca8356f9c5cb9a86f00cf15b784f79`
+(merge commit of Host PR #193, Backend Module SDK 1.9.0).
 
 ## Backend
 
-Every file below maps from `backend/app/modules/analysis_areas/` to
-`backend/src/ocp_module_analysis_areas/` with the same relative suffix:
-
-`__init__.py`, `api/{__init__,router,schemas}.py`,
-`application/{__init__,legacy_queries,legacy_sync,query_service}.py`,
-`contracts/__init__.py`, `domain/{__init__,models}.py`,
-`integrations/{__init__,legacy}.py`, `module.py`, and
-`persistence/{__init__,models}.py`.
-
-Status: übernommen. Refactors are limited to namespace imports, distribution and
-frontend package identity, and the module-local declarative base. The private
-imports isolated in `integrations/legacy.py` are inventoried separately.
+The module-owned files remain under `backend/src/ocp_module_analysis_areas/`.
+The SDK 1.9 cutover introduced `api/filters.py`, `application/cache.py`,
+`application/queries.py` and `settings.py`. It removed `integrations/legacy.py`,
+`application/legacy_queries.py` and the unregistered `application/legacy_sync.py`.
+The router is now created at registration time with explicit public ports.
 
 The four files under
 `backend/src/ocp_module_analysis_areas/migrations/history/` remain byte-identical
@@ -62,7 +55,7 @@ copied or renamed as Analysis Areas code.
 ## Intentionally Host-only
 
 - central router/runtime, AppShell, navigation renderer, MapCanvas and module host;
-- DB session implementation, cache/preview/security adapters and global settings;
+- DB session implementation and cache/preview/security/statistics/polygon adapters;
 - `/vergleich` and comparison stores/components;
 - polygon UI/models, notification UI, OSM viewport store and statistics storage;
 - Statistics migration `20260816_0016` and all unrelated Host-chain migrations;

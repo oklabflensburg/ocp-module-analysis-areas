@@ -25,10 +25,10 @@ materialisierte, persistence-freie DTOs für ID-/Slug-Lookup, Geometrie und
 Hierarchie. Consumer erhalten weder SQLAlchemy-Modelle noch Sessions.
 
 Statistics, Analytics, Polygons, Map Preview, Cache und Public Query Security
-behalten ihre bisherige Ownership. Die Produktion-Endpunkte dafür liegen bis zur
-Migration der Consumer hinter `integrations/legacy.py`. Jede private Abhängigkeit
-ist in der Architecture Baseline exakt benannt und mit #108, #128 oder #129
-verknüpft. Neue Modulpfade dürfen diese Adapter nicht ausweiten.
+behalten ihre bisherige Ownership. Das Modul konsumiert sie ausschließlich über
+die öffentlichen SDK-1.9-Ports seines `ModuleContext`. Gebiet-zu-Polygon-Zuordnung,
+HTTP-Schemas, Filter, Cache-Keys und die POI-Query bleiben module-owned. Es gibt
+keinen Backend-Legacy-Adapter und keine privaten Host-Imports mehr.
 
 ## Aktivieren und deaktivieren
 

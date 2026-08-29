@@ -288,6 +288,15 @@ def main() -> None:
 
         installed_paths = installed_backend_distribution_paths(install_root)
         assert len(installed_paths) == 1
+        run(
+            (
+                str(bundle_python),
+                str(host / "scripts/check_external_module_imports.py"),
+                str(installed_paths[0] / "ocp_module_analysis_areas"),
+            ),
+            cwd=cutover_backend,
+            environment=base_environment,
+        )
         history = installed_paths[0] / "ocp_module_analysis_areas/migrations/history"
         assert {path.name for path in history.glob("*.py")} == {
             "__init__.py",
@@ -392,6 +401,20 @@ def main() -> None:
         enabled = {**base_environment, **enabled_environment}
 
         backend_runtime_check(bundle_python, cutover_backend, enabled)
+        run(
+            (
+                str(bundle_python),
+                "-m",
+                "pytest",
+                str(
+                    repository
+                    / "tests/host-baseline/backend/tests/test_analysis_areas_characterization.py"
+                ),
+                "-q",
+            ),
+            cwd=cutover_backend,
+            environment=enabled,
+        )
         frontend_output = frontend_check(cutover_frontend, enabled)
         assert "analysis-areas" in frontend_output
         assert (cutover_frontend / "frontend-modules/analysis-areas/module.json").is_file()
@@ -467,8 +490,10 @@ def main() -> None:
 
         print(
             "host contract passed: normal verify/install disabled; passive migrations; "
+            "installed-package import guard; "
             "exclusive ownership; duplicate fail-fast; normal CLI enable/disable/re-enable; "
-            "backend/API and frontend route/map discovery; modules:check; typecheck; build; "
+            "backend/API characterization and frontend route/map discovery; "
+            "modules:check; typecheck; build; "
             f"head={EXPECTED_HEAD}; sha256={verified_package['bundle_sha256']}"
         )
 

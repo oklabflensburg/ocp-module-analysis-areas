@@ -12,11 +12,11 @@
   public frontend SDK and ship in the installable layer. The separately rendered
   detail map remains explicitly classified as Host compatibility.
 - [x] Existing table names/data adoption and historical revisions retained.
-- [x] Existing module has no mutations, module permissions, settings, events or jobs;
-  none were invented during extraction.
+- [x] Existing module has no mutations, module permissions, events or jobs. Its two
+  cache TTLs are validated, namespaced module settings with existing defaults.
 - [x] Built-in host code, migrations and tests were not deleted.
-- [ ] Public service ports must replace the audited legacy adapter before the host
-  can enforce a strict public-SDK-only external runtime.
+- [x] Public service ports replace the legacy adapter; the installable backend is
+  strict public-SDK-only module code.
 - [x] Host migration adoption discovers the packaged history passively while the
   installed module is disabled, without runtime activation.
 - [x] Normal Host cutover uses only
@@ -25,8 +25,6 @@
 - [x] Missing cutover configuration fails fast for duplicate backend and frontend
   module IDs; duplicate Host/module migration revisions also fail fast.
 
-The legacy backend adapter is classification **A** for this pinned host: it is a
-compatibility layer over still-present generic/neighbor-domain Host services and
-the installed runtime is technically functional without importing Built-in
-`app.modules.analysis_areas` code. It remains an architectural blocker for a
-strict public-SDK-only module because those service imports are private.
+Host Issue #192 is technically fulfilled for the backend contract. PR #2 remains
+open for review and frontend Issue #4 (`AnalysisAreaDetailMap`) remains the known
+hidden Host-frontend dependency.

@@ -21,9 +21,11 @@ source_commit="${SOURCE_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}"
 source_epoch="$(git -C "$repo_root" show -s --format=%ct "$source_commit" 2>/dev/null || git -C "$repo_root" show -s --format=%ct HEAD)"
 mkdir -p "$repo_root/dist"
 
+# Setuptools otherwise reuses removed package files from a previous build/lib tree.
+rm -rf "$repo_root/backend/build"
 (
   cd "$repo_root/backend"
-  SOURCE_DATE_EPOCH="$source_epoch" uv build --wheel
+  SOURCE_DATE_EPOCH="$source_epoch" uv build --wheel --clear
 )
 (
   cd "$repo_root/frontend"

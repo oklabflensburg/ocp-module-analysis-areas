@@ -5,7 +5,7 @@ Standalone full-stack OCP module extracted losslessly from the built-in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
 Version `1.0.0` is validated against host commit
-`5e0357952ea1e8cac56076f64ec975530e6ab019` on
+`81844b666aca8356f9c5cb9a86f00cf15b784f79` on
 `staging/epic-91-modular-host`. This repository is the future source of truth;
 the built-in remains in the host checkout and is excluded at composition time.
 
@@ -72,20 +72,21 @@ production build. The Built-in backend and frontend stay on disk and are exclude
 only by `OCP_EXCLUDED_BUILTIN_MODULES`. Only the four duplicate Host Alembic files
 are omitted from an isolated test copy for the exclusive-ownership graph check.
 
-## Compatibility and known prerequisites
+## Compatibility
 
-The initial standalone release deliberately keeps the source module's narrow
-legacy adapter so statistics, polygons, caching, preview security, POI analytics
-and social publication behavior are not lost. The import baseline prevents it
-from expanding. Public host service contracts must replace these internal imports
-before a strict SDK-only production cutover.
+The backend requires Module SDK `>=1.9.0,<2.0.0`. It receives the database,
+module-scoped cache, cache generations, public-query policy, map preview,
+polygon query/analytics and statistics capabilities exclusively through its
+`ModuleContext`. The installable Python package has no private Host imports.
+Analysis-Areas-specific schemas, filter parsing, cache keys and the spatial POI
+query remain module-owned.
 
 Existing Alembic IDs and their host-chain `down_revision` links are not renamed.
-The module declares all four IDs explicitly through the SDK 1.8 adoption contract;
+The module declares all four IDs explicitly through the SDK 1.9 adoption contract;
 future migrations must use `mod_analysis_areas_*` and extend the then-current
 global head. No baseline table creation, graph rewrite, or data copy was introduced.
-The temporary host/module migration duplicate remains deliberately invalid until
-the built-in migration copies leave the host source.
+The lifecycle test removes duplicate built-in migration sources only in its
+isolated cutover copy and validates passive discovery while installation is disabled.
 
 Detailed evidence:
 
