@@ -105,10 +105,22 @@ with those results. Never point CI at a branch name.
 
 ## Release
 
-Tag `v1.0.0` must equal manifest, backend and frontend version. The release job
-reruns all gates, builds the `.ocp`, calculates SHA-256 and refuses to mutate an
-existing release. Release note: “First standalone release extracted from Open
-City Planner built-in module.”
+The release tag must equal `v` plus the version in `module.yaml`. Create and push
+a release tag normally with:
+
+```bash
+git tag -a vX.Y.Z <commit> -m "Release vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+If that tag already exists but its GitHub Release was not created, retry it via
+**Actions → Release → Run workflow** and enter `vX.Y.Z` for `tag`. The manual
+retry is only for an existing tag; it checks out and builds that exact tag rather
+than the current `main` branch.
+
+The release job reruns all gates, builds the `.ocp`, calculates SHA-256 and
+refuses to mutate an existing release. Release note: “First standalone release
+extracted from Open City Planner built-in module.”
 
 ## Cutover preconditions
 

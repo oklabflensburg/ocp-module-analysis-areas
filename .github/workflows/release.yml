@@ -3,17 +3,39 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
           fetch-depth: 0
+      - name: Resolve release tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          source_commit=$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")
+          test "$(git rev-parse HEAD)" = "$source_commit"
+          echo "SOURCE_COMMIT=$source_commit" >> "$GITHUB_ENV"
       - id: contract
         run: echo "commit=$(python -c 'import json; print(json.load(open(".github/ocp-host-contract.json"))["commit"])')" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,6 +56,10 @@ jobs:
       - run: python -m pip install uv==0.12.5
       - run: uv sync --frozen --extra dev
         working-directory: backend
+      - name: Validate tag and version
+        run: |
+          version=$(cd backend && uv run python -c 'import yaml; print(yaml.safe_load(open("../module.yaml"))["version"])')
+          test "$RELEASE_TAG" = "v$version"
       - run: uv run ruff check src tests && uv run pytest
         working-directory: backend
       - run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm test
@@ -42,25 +68,20 @@ jobs:
         working-directory: .host-contract/backend
       - run: pnpm install --frozen-lockfile
         working-directory: .host-contract/frontend
-      - name: Validate tag and versions
-        run: |
-          version=$(python -c 'import yaml; print(yaml.safe_load(open("module.yaml"))["version"])')
-          test "$GITHUB_REF_NAME" = "v$version"
-          test "$version" = "1.0.0"
-      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" SOURCE_COMMIT="$GITHUB_SHA" scripts/build-bundle
+      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" SOURCE_COMMIT="$SOURCE_COMMIT" scripts/build-bundle
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/host-contract-test
       - run: sha256sum -c dist/analysis-areas-1.0.0.ocp.sha256
       - name: Publish immutable release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; refusing mutation." >&2
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing mutation." >&2
             exit 1
           fi
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$RELEASE_TAG" \
             dist/analysis-areas-1.0.0.ocp \
             dist/analysis-areas-1.0.0.ocp.sha256 \
             --verify-tag \
-            --title "$GITHUB_REF_NAME" \
+            --title "$RELEASE_TAG" \
             --notes "First standalone release extracted from Open City Planner built-in module"
