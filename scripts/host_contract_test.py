@@ -171,8 +171,8 @@ for expected in (
 ):
     assert expected in paths, expected
 assert module_runtime.job_registry is not None
-assert {item.job_id for item in module_runtime.job_registry.jobs} >= {
-    "analysis-areas.wikidata-refresh"
+assert "analysis-areas.wikidata-refresh" not in {
+    item.job_id for item in module_runtime.job_registry.jobs
 }
 """
     run((str(python), "-c", probe), cwd=backend, environment=environment)

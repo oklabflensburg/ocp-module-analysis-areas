@@ -53,18 +53,27 @@ code.
 
 ## Wikidata operations
 
-The backend registers `analysis-areas.wikidata-refresh` with the public Module
-Job Registry. It also publishes the versioned service contract
-`analysis-areas.wikidata-maintenance` (version 1), whose `sync(force=...)` and
-`set_manual_match(area, qid, allow_name_mismatch=...)` methods preserve the old
-refresh and manual-assignment capabilities. Reads, provider calls and writes use
-separate phases, so Wikidata latency never retains a checked-out DB session.
+The Wikidata implementation is ready and the backend publishes the versioned
+service contract `analysis-areas.wikidata-maintenance` (version 1), whose
+`sync(force=...)` and `set_manual_match(area, qid,
+allow_name_mismatch=...)` methods preserve the old refresh and manual-assignment
+capabilities. Reads, provider calls and writes use separate phases, so Wikidata
+latency never retains a checked-out DB session.
 
-The pinned Host has no generic CLI for running registered jobs or passing
-arguments to module maintenance commands. Therefore the old three Host-specific
-CLI entry points cannot yet be replaced by a documented operator command. This
-and the OSM postprocessing/event dependencies are precise blocking contracts,
-not removed functionality; see the parity inventory before any Host cleanup.
+Automatic execution is intentionally disabled: SDK 1.9's public
+`CacheGenerationPort` can only read `current(...)`, while the historical workflow
+atomically bumped the shared `analysis-areas` generation in the same transaction
+as its database writes. Consequently `analysis-areas.wikidata-refresh` is not
+registered until the Host supplies a transactional public generation-bump
+operation. This prevents scheduled writes from leaving generation-keyed consumers
+stale.
+
+The pinned Host has no generic CLI for passing arguments to module maintenance
+commands (or for running a future safely registered job). Therefore the old three
+Host-specific CLI entry points cannot yet be replaced by a documented operator
+command. This and the OSM postprocessing/event dependencies are precise blocking
+contracts, not removed functionality; see the parity inventory before any Host
+cleanup.
 
 ## Installation and cutover
 
@@ -96,8 +105,11 @@ polygon query/analytics and statistics capabilities exclusively through its
 Analysis-Areas-specific schemas, filter parsing, cache keys and the spatial POI
 query remain module-owned.
 Wikidata is a module-owned external-provider adapter. It prefers the SDK HTTP
-port and uses its declared `httpx` dependency with explicit timeout/User-Agent
-when the pinned Host leaves that optional port unwired.
+port. The pinned production context leaves that optional port unwired, so this
+trusted in-process module temporarily uses its declared `httpx` dependency with
+explicit timeout, User-Agent, bounded retry and context-managed cleanup. The Host
+architecture assigns safe HTTP-client infrastructure to the Host; wiring the
+existing public port remains a Host follow-up so this fallback need not be permanent.
 
 Existing Alembic IDs and their host-chain `down_revision` links are not renamed.
 The module declares all four IDs explicitly through the SDK 1.9 adoption contract;

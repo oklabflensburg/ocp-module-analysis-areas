@@ -1,7 +1,6 @@
 """Composition root for the production Analysis Areas module."""
 
 from app.platform.modules.sdk import (
-    JobDefinition,
     ModuleContext,
     ModuleDefinition,
     ModuleMigrationSource,
@@ -60,7 +59,6 @@ class AnalysisAreasModule:
             "polygon analytics": context.polygon_analytics,
             "statistics": context.statistics,
             "settings": context.settings,
-            "scheduler": context.scheduler,
         }
         if missing := [name for name, port in required.items() if port is None]:
             raise RuntimeError(
@@ -78,7 +76,6 @@ class AnalysisAreasModule:
         assert context.polygon_analytics is not None
         assert context.statistics is not None
         assert context.settings is not None
-        assert context.scheduler is not None
         settings = context.settings.require(AnalysisAreasSettings)
         router = create_router(
             context.database,
@@ -121,29 +118,6 @@ class AnalysisAreasModule:
             service_id=MAINTENANCE_SERVICE_ID,
             version=MAINTENANCE_SERVICE_VERSION,
         )
-
-        async def refresh_wikidata(_context: ModuleContext) -> object:
-            report = await wikidata.sync()
-            context.observability.metrics.observe("wikidata-checked", float(report.checked))
-            context.observability.metrics.observe(
-                "wikidata-errors", float(len(report.errors))
-            )
-            context.logger.info(
-                "Wikidata enrichment completed",
-                extra={
-                    "checked": report.checked,
-                    "matched": report.osm_wikidata
-                    + report.osm_wikipedia
-                    + report.search,
-                    "errors": len(report.errors),
-                },
-            )
-            return report
-
-        context.scheduler.register(
-            JobDefinition(job_id="wikidata-refresh", handler=refresh_wikidata)
-        )
-
 
 DEFINITION = ModuleDefinition(
     manifest=MANIFEST,
