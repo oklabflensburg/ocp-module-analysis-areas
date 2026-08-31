@@ -53,27 +53,27 @@ code.
 
 ## Wikidata operations
 
-The Wikidata implementation is ready and the backend publishes the versioned
-service contract `analysis-areas.wikidata-maintenance` (version 1), whose
-`sync(force=...)` and `set_manual_match(area, qid,
-allow_name_mismatch=...)` methods preserve the old refresh and manual-assignment
-capabilities. Reads, provider calls and writes use separate phases, so Wikidata
-latency never retains a checked-out DB session.
+Wikidata implementation parity is present internally: the domain model, provider
+adapter and application service retain `sync(force=...)` and
+`set_manual_match(area, qid, allow_name_mismatch=...)`. Reads, provider calls and
+writes use separate phases, so Wikidata latency never retains a checked-out DB
+session.
 
-Automatic execution is intentionally disabled: SDK 1.9's public
+Automatic execution and public mutating maintenance exposure are intentionally
+disabled: SDK 1.9's public
 `CacheGenerationPort` can only read `current(...)`, while the historical workflow
 atomically bumped the shared `analysis-areas` generation in the same transaction
-as its database writes. Consequently `analysis-areas.wikidata-refresh` is not
-registered until the Host supplies a transactional public generation-bump
-operation. This prevents scheduled writes from leaving generation-keyed consumers
-stale.
+as its database writes. Consequently neither `analysis-areas.wikidata-refresh`
+nor `analysis-areas.wikidata-maintenance` is registered until the Host supplies a
+transactional public generation-bump operation. The maintenance capability is
+also absent from the manifest. This prevents any Host registry consumer from
+changing rows while leaving generation-keyed consumers stale.
 
-The pinned Host has no generic CLI for passing arguments to module maintenance
-commands (or for running a future safely registered job). Therefore the old three
-Host-specific CLI entry points cannot yet be replaced by a documented operator
-command. This and the OSM postprocessing/event dependencies are precise blocking
-contracts, not removed functionality; see the parity inventory before any Host
-cleanup.
+The pinned Host also has no generic CLI for future safe argument-bearing module
+commands or jobs. Therefore the old three Host-specific CLI entry points cannot
+yet be replaced by a documented operator command. This and the OSM
+postprocessing/event dependencies are precise blocking contracts, not removed
+functionality; see the parity inventory before any Host cleanup.
 
 ## Installation and cutover
 

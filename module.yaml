@@ -16,7 +16,6 @@ capabilities:
   - analysis-areas.public-api
   - analysis-areas.lookup
   - analysis-areas.geojson
-  - analysis-areas.wikidata-maintenance
 permissions: []
 config:
   namespace: analysis-areas

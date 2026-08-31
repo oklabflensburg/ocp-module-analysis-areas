@@ -6,8 +6,6 @@ from typing import Protocol
 
 SERVICE_ID = "analysis-areas.lookup"
 SERVICE_VERSION = 1
-MAINTENANCE_SERVICE_ID = "analysis-areas.wikidata-maintenance"
-MAINTENANCE_SERVICE_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,8 +67,6 @@ class WikidataMaintenanceService(Protocol):
 
 
 __all__ = [
-    "MAINTENANCE_SERVICE_ID",
-    "MAINTENANCE_SERVICE_VERSION",
     "SERVICE_ID",
     "SERVICE_VERSION",
     "AnalysisAreaGeometry",

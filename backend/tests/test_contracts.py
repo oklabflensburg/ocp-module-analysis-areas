@@ -51,6 +51,27 @@ def test_manifest_and_package_versions_are_consistent() -> None:
     assert manifest["frontend"]["package"] == "@open-city-planner/analysis-areas"
     assert manifest["requires"]["sdk"] == ">=1.9.0,<2.0.0"
     assert manifest["persistence"]["migrations"] is True
+    assert manifest["capabilities"] == [
+        "analysis-areas.public-api",
+        "analysis-areas.lookup",
+        "analysis-areas.geojson",
+    ]
+
+
+def test_wikidata_mutations_remain_internal_until_generation_bump_exists() -> None:
+    module_source = (PACKAGE / "module.py").read_text(encoding="utf-8")
+    contracts_source = (PACKAGE / "contracts/__init__.py").read_text(encoding="utf-8")
+    application_source = (PACKAGE / "application/wikidata.py").read_text(encoding="utf-8")
+
+    assert "analysis-areas.wikidata-refresh" not in module_source
+    assert "analysis-areas.wikidata-maintenance" not in module_source
+    assert "MAINTENANCE_SERVICE_ID" not in contracts_source
+    assert "MAINTENANCE_SERVICE_VERSION" not in contracts_source
+    assert "class WikidataMaintenanceService(Protocol)" in contracts_source
+    assert "class WikidataSyncResult" in contracts_source
+    assert "class WikidataEnrichmentService" in application_source
+    assert "async def sync(" in application_source
+    assert "async def set_manual_match(" in application_source
 
 
 def test_host_contract_is_exact_sdk_1_9_merge() -> None:

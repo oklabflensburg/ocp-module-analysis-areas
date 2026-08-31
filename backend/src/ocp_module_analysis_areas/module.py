@@ -10,16 +10,12 @@ from app.platform.modules.sdk import (
 )
 
 from .api.router import create_router
-from .application import SqlAnalysisAreaQueryService, WikidataEnrichmentService
+from .application import SqlAnalysisAreaQueryService
 from .contracts import (
-    MAINTENANCE_SERVICE_ID,
-    MAINTENANCE_SERVICE_VERSION,
     SERVICE_ID,
     SERVICE_VERSION,
     AnalysisAreaQueryService,
-    WikidataMaintenanceService,
 )
-from .integrations.wikidata import WikidataClient
 from .persistence import METADATA
 from .settings import AnalysisAreasSettings
 
@@ -36,7 +32,6 @@ MANIFEST = parse_manifest(
             "analysis-areas.public-api",
             "analysis-areas.lookup",
             "analysis-areas.geojson",
-            "analysis-areas.wikidata-maintenance",
         ],
         "config": {"namespace": "analysis-areas"},
         "persistence": {"schema": "analysis_areas", "migrations": True},
@@ -97,28 +92,6 @@ class AnalysisAreasModule:
             service_id=SERVICE_ID,
             version=SERVICE_VERSION,
         )
-        wikidata = WikidataEnrichmentService(
-            context.database,
-            context.cache,
-            WikidataClient(
-                context.http,
-                context.cache,
-                api_url=settings.wikidata_api_url,
-                cache_ttl_seconds=settings.wikidata_cache_ttl_seconds,
-                negative_cache_ttl_seconds=settings.wikidata_negative_cache_ttl_seconds,
-                search_limit=settings.wikidata_search_limit,
-                timeout_seconds=settings.wikidata_timeout_seconds,
-                user_agent=settings.wikidata_user_agent,
-            ),
-            stale_days=settings.wikidata_stale_days,
-        )
-        context.services.register(
-            WikidataMaintenanceService,
-            wikidata,
-            service_id=MAINTENANCE_SERVICE_ID,
-            version=MAINTENANCE_SERVICE_VERSION,
-        )
-
 DEFINITION = ModuleDefinition(
     manifest=MANIFEST,
     loader=AnalysisAreasModule,

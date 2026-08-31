@@ -35,8 +35,8 @@ done < <(find "$source" -type f -name '*.py' | sort)
 printf '\nHistorical workflow -> standalone owner/status\n'
 printf '%s\n' \
   'backend/app/cli/sync_analysis_areas.py -> BLOCKED: documented public contracts' \
-  'backend/app/cli/sync_wikidata.py -> application/wikidata.py + maintenance service; automatic job BLOCKED on transactional cache-generation bump' \
-  'backend/app/cli/set_area_wikidata.py -> analysis-areas.wikidata-maintenance v1; generic CLI blocked' \
+  'backend/app/cli/sync_wikidata.py -> internal application/wikidata.py; automatic job and public service BLOCKED on transactional cache-generation bump' \
+  'backend/app/cli/set_area_wikidata.py -> internal application/wikidata.py; public maintenance and generic CLI blocked' \
   'backend/app/services/wikidata_enrichment.py -> domain/application/integrations/wikidata.py' \
   'backend/app/cli/postprocess_osm.py -> BLOCKED: no public postprocessing event at Host pin'
 

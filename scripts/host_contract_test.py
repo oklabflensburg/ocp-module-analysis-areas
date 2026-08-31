@@ -148,6 +148,12 @@ from app.core.config import get_settings
 from app.main import app, module_runtime
 from app.platform.modules import EntryPointModuleDiscovery, FirstPartyModuleDiscovery
 from app.platform.modules.runtime import resolve_module_definitions
+from ocp_module_analysis_areas.contracts import (
+    SERVICE_ID,
+    SERVICE_VERSION,
+    AnalysisAreaQueryService,
+    WikidataMaintenanceService,
+)
 
 settings = get_settings()
 definitions = resolve_module_definitions(
@@ -158,6 +164,7 @@ definitions = resolve_module_definitions(
 analysis = [item for item in definitions if item[1].id == "analysis-areas"]
 assert len(analysis) == 1
 assert analysis[0][0].origin.startswith("entry-point:analysis-areas=")
+assert "analysis-areas.wikidata-maintenance" not in analysis[0][1].capabilities
 assert not any(
     item.declared_id == "analysis-areas"
     for item in FirstPartyModuleDiscovery().discover_available()
@@ -174,6 +181,16 @@ assert module_runtime.job_registry is not None
 assert "analysis-areas.wikidata-refresh" not in {
     item.job_id for item in module_runtime.job_registry.jobs
 }
+services = module_runtime.registry.get("analysis-areas").context.services
+assert services is not None
+assert services.optional(
+    AnalysisAreaQueryService, service_id=SERVICE_ID, version=SERVICE_VERSION
+) is not None
+assert services.optional(
+    WikidataMaintenanceService,
+    service_id="analysis-areas.wikidata-maintenance",
+    version=1,
+) is None
 """
     run((str(python), "-c", probe), cwd=backend, environment=environment)
 
@@ -514,6 +531,7 @@ def main() -> None:
             "host contract passed: normal verify/install disabled; passive migrations; "
             "installed-package import guard; "
             "exclusive ownership; duplicate fail-fast; normal CLI enable/disable/re-enable; "
+            "wikidata job/service/capability absent; "
             "backend/API characterization and frontend route/map discovery; "
             "built-in-free detail-map ownership and social-preview ready wiring; "
             "modules:check; typecheck; build; "

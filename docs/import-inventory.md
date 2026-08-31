@@ -33,14 +33,15 @@ blocked on the public OSM, polygon-command, cache-mutation and postprocessing-ev
 contracts inventoried in `sync-wikidata-parity.md`; no private replacement import
 was introduced.
 
-Wikidata enrichment uses `ModuleContext.database`, `.cache`, `.settings` and
-`.services`. It prefers `ModuleContext.http` when supplied. SDK 1.9 defines that
-port but the pinned production context does not wire it, so the trusted
-in-process provider adapter temporarily has an explicit `httpx`
+The internal Wikidata enrichment implementation is written against public
+`DatabaseSessionProvider`, `CachePort` and optional `HttpClientFactoryPort`
+contracts. SDK 1.9 defines the HTTP port but the pinned production context does
+not wire it, so the trusted in-process provider adapter has an explicit `httpx`
 timeout/User-Agent/bounded-retry fallback with context-managed cleanup, without
 importing Host implementation. Host-owned HTTP-client infrastructure remains the
-architectural target. The scheduler is deliberately unused until the public
-cache-generation port gains a transactional mutation operation.
+architectural target. Neither scheduler nor service registry exposes Wikidata
+mutations until the public cache-generation port gains a transactional mutation
+operation.
 
 `backend/tests/test_contracts.py` rejects every `app.*` import other than
 `app.platform.modules.sdk` and rejects legacy files in the built wheel. The pinned

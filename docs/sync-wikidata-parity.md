@@ -21,12 +21,12 @@ is proven obsolete. Nothing in this inventory is classified D.
 | Invalidate `analysis-areas` and `analytics` generations | same | end of sync | `cache_versions` | cache platform | generation bump | cache/API tests | B | SDK 1.9 exposes only `current`; mutating invalidation contract is missing |
 | Resolve OSM Wikidata, OSM Wikipedia, then contextual search | `services/wikidata_enrichment.py` | sync CLI, sync-with-enrichment CLI, OSM postprocess | read/write `analysis_areas` | Wikidata API | provider cache and analysis-area invalidation | `test_wikidata_enrichment.py` | A using B HTTP/cache/DB | `integrations/wikidata.py`, `application/wikidata.py` |
 | Validate candidates by name, geographic distance, parent and description | same | same | area snapshot | Wikidata API | provider cache | same | A | same; network phase uses immutable snapshots and no checked-out DB session |
-| Persist status/confidence and preserve `MANUAL` rows | same | same | `analysis_areas` | none | module cache clear; shared generation bump unavailable | historical SQL behavior plus ported tests | A using B cache invalidation | implementation ready through maintenance service; automatic execution blocked |
-| Manual assignment by slug or unique case-insensitive name, QID/entity/name validation | `cli/set_area_wikidata.py` | operator CLI | `analysis_areas` | Wikidata API | module cache clear; shared generation bump unavailable | previously indirect | A | public maintenance service; generic argument-bearing module CLI and transactional generation bump contracts are missing |
+| Persist status/confidence and preserve `MANUAL` rows | same | same | `analysis_areas` | none | module cache clear; shared generation bump unavailable | historical SQL behavior plus ported tests | A using B cache invalidation | implementation ready internally; automatic and public service execution blocked |
+| Manual assignment by slug or unique case-insensitive name, QID/entity/name validation | `cli/set_area_wikidata.py` | operator CLI | `analysis_areas` | Wikidata API | module cache clear; shared generation bump unavailable | previously indirect | A | implementation ready internally; no public maintenance service, capability or generic argument-bearing module CLI |
 | Wikidata retries, timeout/provider error isolation and negative caching | `services/wikidata_enrichment.py` | every enrichment | none during HTTP | Wikidata API | positive/negative TTL | provider tests | A policy using B HTTP/cache | ported; public HTTP port preferred; temporary trusted-module `httpx` fallback has explicit timeout/User-Agent, bounded retry and cleanup tests because the pinned production context leaves `http` unwired |
 | Structured job logging/metrics/retry/non-concurrency | Host job registry | registered job | none | none | none | `test_module_jobs.py` | B | application implementation exists, but `analysis-areas.wikidata-refresh` is intentionally **not registered** until transactional shared-generation invalidation is public |
 | OSM postprocessing trigger | `cli/postprocess_osm.py` immediately after OSM reconciliation, inside its transaction for area sync and after commit for Wikidata | hourly OSM import | OSM, area, polygon, state tables | OSM/Wikidata | several generations | `test_osm_sync.py` | C event producer, A subscribers/jobs | **blocked**: the pinned Host emits no public postprocess event |
-| Operational CLIs | three files under `backend/app/cli/` | operator invocation | as above | OSM/Wikidata | as above | no direct CLI tests | A commands over B generic module operations | maintenance service exists; generic job-run and argument-bearing command contracts are missing |
+| Operational CLIs | three files under `backend/app/cli/` | operator invocation | as above | OSM/Wikidata | as above | no direct CLI tests | A commands over B generic module operations | implementation exists internally; public service/job exposure and generic operation contracts are missing |
 
 ## Transaction and failure characterization
 
@@ -67,8 +67,9 @@ The smallest sufficient public additions are:
    Host never names Analysis Areas.
 2. A cache-generation invalidation operation (`bump(session, resources)`) on the
    existing generic port. It must participate in the caller transaction. Until
-   that contract exists, the automatic Wikidata job remains unregistered even
-   though the implementation and maintenance service are available.
+   that contract exists, both the automatic Wikidata job and public mutating
+   maintenance service remain unregistered, and no maintenance capability is
+   announced, even though the implementation is retained internally.
 3. A polygon-domain command that atomically refreshes assignments for a supplied
    module-owned area snapshot/scope, or a versioned event consumed by the polygon
    owner. No `user_polygons` table/ORM type may cross the boundary.

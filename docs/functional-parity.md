@@ -13,13 +13,14 @@
   uses public style/HTTP/cursor ports, declares MapLibre directly and preserves
   its browser-only lifecycle, resize cleanup and social-preview `@ready` event.
 - [x] Existing table names/data adoption and historical revisions retained.
-- [x] Wikidata lookup, matching, refresh and manual assignment are module-owned;
-  `analysis-areas.wikidata-maintenance` remains available through the public
-  service registry.
-- [ ] Automatic Wikidata execution is intentionally disabled: the module does
-  not register `analysis-areas.wikidata-refresh` until a public transactional
-  `CacheGenerationPort.bump(session, resources)` can preserve the historical
-  `analysis-areas` generation contract.
+- [x] Wikidata lookup, matching, refresh and manual-assignment implementation is
+  retained internally as module-owned domain, provider and application code.
+- [ ] Automatic execution and public mutating maintenance exposure are
+  intentionally disabled: the module registers neither
+  `analysis-areas.wikidata-refresh` nor
+  `analysis-areas.wikidata-maintenance` and announces no maintenance capability
+  until a public transactional `CacheGenerationPort.bump(session, resources)`
+  can preserve the historical `analysis-areas` generation contract.
 - [x] Wikidata network calls run without a checked-out DB session and provider
   failures remain isolated per area.
 - [ ] OSM area sync, polygon assignment refresh, social-change publication and
