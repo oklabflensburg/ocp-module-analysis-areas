@@ -26,8 +26,22 @@ The former `integrations/legacy.py` adapter was deleted. Its replacements are:
 - Host GeoJSON, external-link, analytics and polygon-filter schemas → module-owned schemas;
 - Host POI category SQL → module-owned `AREA_POI_CATEGORY_SQL`.
 
-`application/legacy_sync.py` had no runtime registration or package consumer and was
-deleted. Its social publishing and cache-bump imports therefore required no new port.
+The earlier extraction deleted `application/legacy_sync.py` because it had no
+runtime registration inside the built-in module. Git history proves that Host CLI
+and OSM postprocessing consumers nevertheless existed. Its reinstatement is
+blocked on the public OSM, polygon-command, cache-mutation and postprocessing-event
+contracts inventoried in `sync-wikidata-parity.md`; no private replacement import
+was introduced.
+
+The internal Wikidata enrichment implementation is written against public
+`DatabaseSessionProvider`, `CachePort` and optional `HttpClientFactoryPort`
+contracts. SDK 1.9 defines the HTTP port but the pinned production context does
+not wire it, so the trusted in-process provider adapter has an explicit `httpx`
+timeout/User-Agent/bounded-retry fallback with context-managed cleanup, without
+importing Host implementation. Host-owned HTTP-client infrastructure remains the
+architectural target. Neither scheduler nor service registry exposes Wikidata
+mutations until the public cache-generation port gains a transactional mutation
+operation.
 
 `backend/tests/test_contracts.py` rejects every `app.*` import other than
 `app.platform.modules.sdk` and rejects legacy files in the built wheel. The pinned

@@ -7,9 +7,13 @@ Pinned Host: `open-city-planner@81844b666aca8356f9c5cb9a86f00cf15b784f79`
 
 The module-owned files remain under `backend/src/ocp_module_analysis_areas/`.
 The SDK 1.9 cutover introduced `api/filters.py`, `application/cache.py`,
-`application/queries.py` and `settings.py`. It removed `integrations/legacy.py`,
-`application/legacy_queries.py` and the unregistered `application/legacy_sync.py`.
-The router is now created at registration time with explicit public ports.
+`application/queries.py` and `settings.py`. It removed `integrations/legacy.py`
+and `application/legacy_queries.py`. The earlier removal of
+`application/legacy_sync.py` is now recorded as a parity gap rather than a valid
+dead-code deletion. Wikidata domain values, provider integration and application
+workflow live in `domain/wikidata.py`, `integrations/wikidata.py` and
+`application/wikidata.py`. The router is created at registration time with
+explicit public ports.
 
 The four files under
 `backend/src/ocp_module_analysis_areas/migrations/history/` remain byte-identical
@@ -61,7 +65,10 @@ copied or renamed as Analysis Areas code.
 - `/vergleich` and comparison stores/components;
 - polygon UI/models, notification UI, OSM viewport store and statistics storage;
 - Statistics migration `20260816_0016` and all unrelated Host-chain migrations;
-- CLI consumers for OSM sync and Wikidata enrichment.
+- generic Host module-job/maintenance CLI integration (not present in SDK 1.9);
+- OSM postprocessing producer and other-domain consumers, pending the contracts
+  in `sync-wikidata-parity.md`.
 
-These are consumers, platform primitives, or other domain owners. Their behavior
-remains covered by Host tests and no implementation was copied or relabeled.
+These are consumers, platform primitives, or other domain owners. Wikidata
+behavior is now module-owned; the remaining unported behavior is explicitly
+blocked and no private implementation was copied or relabeled.

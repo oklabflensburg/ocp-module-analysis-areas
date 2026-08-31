@@ -11,7 +11,11 @@ from app.platform.modules.sdk import (
 
 from .api.router import create_router
 from .application import SqlAnalysisAreaQueryService
-from .contracts import SERVICE_ID, SERVICE_VERSION, AnalysisAreaQueryService
+from .contracts import (
+    SERVICE_ID,
+    SERVICE_VERSION,
+    AnalysisAreaQueryService,
+)
 from .persistence import METADATA
 from .settings import AnalysisAreasSettings
 
@@ -20,7 +24,7 @@ MANIFEST = parse_manifest(
         "manifest_version": 1,
         "id": "analysis-areas",
         "name": "Analysis Areas",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.9.0,<2.0.0"},
         "backend": {"package": "ocp-module-analysis-areas"},
         "frontend": {"package": "@open-city-planner/analysis-areas"},
@@ -88,8 +92,6 @@ class AnalysisAreasModule:
             service_id=SERVICE_ID,
             version=SERVICE_VERSION,
         )
-
-
 DEFINITION = ModuleDefinition(
     manifest=MANIFEST,
     loader=AnalysisAreasModule,

@@ -7,8 +7,37 @@ source="$host_root/backend/app/modules/analysis_areas"
 target="$repo_root/backend/src/ocp_module_analysis_areas"
 
 printf 'Host backend file -> standalone backend file\n'
+unclassified=0
 while IFS= read -r file; do
   relative="${file#$source/}"
-  if [[ -f "$target/$relative" ]]; then state=present; else state=MISSING; fi
+  if [[ -f "$target/$relative" ]]; then
+    state=present
+  else
+    case "$relative" in
+      application/legacy_queries.py)
+        state='REPLACED: application/queries.py + public SDK ports'
+        ;;
+      application/legacy_sync.py)
+        state='BLOCKED: docs/sync-wikidata-parity.md (OSM/event/cache/polygon contracts)'
+        ;;
+      integrations/legacy.py)
+        state='REPLACED: public SDK ports; no private adapter'
+        ;;
+      *)
+        state=UNCLASSIFIED
+        unclassified=1
+        ;;
+    esac
+  fi
   printf '%s -> %s [%s]\n' "$file" "$target/$relative" "$state"
 done < <(find "$source" -type f -name '*.py' | sort)
+
+printf '\nHistorical workflow -> standalone owner/status\n'
+printf '%s\n' \
+  'backend/app/cli/sync_analysis_areas.py -> BLOCKED: documented public contracts' \
+  'backend/app/cli/sync_wikidata.py -> internal application/wikidata.py; automatic job and public service BLOCKED on transactional cache-generation bump' \
+  'backend/app/cli/set_area_wikidata.py -> internal application/wikidata.py; public maintenance and generic CLI blocked' \
+  'backend/app/services/wikidata_enrichment.py -> domain/application/integrations/wikidata.py' \
+  'backend/app/cli/postprocess_osm.py -> BLOCKED: no public postprocessing event at Host pin'
+
+exit "$unclassified"
