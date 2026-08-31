@@ -1,6 +1,7 @@
 """Composition root for the production Analysis Areas module."""
 
 from app.platform.modules.sdk import (
+    JobDefinition,
     ModuleContext,
     ModuleDefinition,
     ModuleMigrationSource,
@@ -10,8 +11,16 @@ from app.platform.modules.sdk import (
 )
 
 from .api.router import create_router
-from .application import SqlAnalysisAreaQueryService
-from .contracts import SERVICE_ID, SERVICE_VERSION, AnalysisAreaQueryService
+from .application import SqlAnalysisAreaQueryService, WikidataEnrichmentService
+from .contracts import (
+    MAINTENANCE_SERVICE_ID,
+    MAINTENANCE_SERVICE_VERSION,
+    SERVICE_ID,
+    SERVICE_VERSION,
+    AnalysisAreaQueryService,
+    WikidataMaintenanceService,
+)
+from .integrations.wikidata import WikidataClient
 from .persistence import METADATA
 from .settings import AnalysisAreasSettings
 
@@ -20,7 +29,7 @@ MANIFEST = parse_manifest(
         "manifest_version": 1,
         "id": "analysis-areas",
         "name": "Analysis Areas",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.9.0,<2.0.0"},
         "backend": {"package": "ocp-module-analysis-areas"},
         "frontend": {"package": "@open-city-planner/analysis-areas"},
@@ -28,6 +37,7 @@ MANIFEST = parse_manifest(
             "analysis-areas.public-api",
             "analysis-areas.lookup",
             "analysis-areas.geojson",
+            "analysis-areas.wikidata-maintenance",
         ],
         "config": {"namespace": "analysis-areas"},
         "persistence": {"schema": "analysis_areas", "migrations": True},
@@ -50,6 +60,7 @@ class AnalysisAreasModule:
             "polygon analytics": context.polygon_analytics,
             "statistics": context.statistics,
             "settings": context.settings,
+            "scheduler": context.scheduler,
         }
         if missing := [name for name, port in required.items() if port is None]:
             raise RuntimeError(
@@ -67,6 +78,7 @@ class AnalysisAreasModule:
         assert context.polygon_analytics is not None
         assert context.statistics is not None
         assert context.settings is not None
+        assert context.scheduler is not None
         settings = context.settings.require(AnalysisAreasSettings)
         router = create_router(
             context.database,
@@ -87,6 +99,49 @@ class AnalysisAreasModule:
             ),
             service_id=SERVICE_ID,
             version=SERVICE_VERSION,
+        )
+        wikidata = WikidataEnrichmentService(
+            context.database,
+            context.cache,
+            WikidataClient(
+                context.http,
+                context.cache,
+                api_url=settings.wikidata_api_url,
+                cache_ttl_seconds=settings.wikidata_cache_ttl_seconds,
+                negative_cache_ttl_seconds=settings.wikidata_negative_cache_ttl_seconds,
+                search_limit=settings.wikidata_search_limit,
+                timeout_seconds=settings.wikidata_timeout_seconds,
+                user_agent=settings.wikidata_user_agent,
+            ),
+            stale_days=settings.wikidata_stale_days,
+        )
+        context.services.register(
+            WikidataMaintenanceService,
+            wikidata,
+            service_id=MAINTENANCE_SERVICE_ID,
+            version=MAINTENANCE_SERVICE_VERSION,
+        )
+
+        async def refresh_wikidata(_context: ModuleContext) -> object:
+            report = await wikidata.sync()
+            context.observability.metrics.observe("wikidata-checked", float(report.checked))
+            context.observability.metrics.observe(
+                "wikidata-errors", float(len(report.errors))
+            )
+            context.logger.info(
+                "Wikidata enrichment completed",
+                extra={
+                    "checked": report.checked,
+                    "matched": report.osm_wikidata
+                    + report.osm_wikipedia
+                    + report.search,
+                    "errors": len(report.errors),
+                },
+            )
+            return report
+
+        context.scheduler.register(
+            JobDefinition(job_id="wikidata-refresh", handler=refresh_wikidata)
         )
 
 

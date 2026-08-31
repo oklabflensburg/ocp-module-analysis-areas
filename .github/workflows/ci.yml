@@ -85,4 +85,4 @@ jobs:
         working-directory: frontend
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/build-bundle
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/host-contract-test
-      - run: sha256sum -c dist/analysis-areas-1.0.0.ocp.sha256
+      - run: sha256sum -c dist/analysis-areas-1.1.0.ocp.sha256

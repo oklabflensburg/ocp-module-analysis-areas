@@ -34,6 +34,7 @@ except ModuleNotFoundError:
     sdk_module.CachePort = Port
     sdk_module.CacheGenerationPort = Port
     sdk_module.DatabaseSessionProvider = Port
+    sdk_module.HttpClientFactoryPort = Port
     sdk_module.PolygonAnalyticsPort = Port
     sdk_module.PolygonFilterValues = PolygonFilterValues
     sdk_module.PolygonQueryPort = Port

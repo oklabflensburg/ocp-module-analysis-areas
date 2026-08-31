@@ -44,9 +44,9 @@ def test_manifest_and_package_versions_are_consistent() -> None:
     frontend = json.loads((ROOT / "frontend/module.json").read_text(encoding="utf-8"))
     package = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
     assert manifest["id"] == frontend["id"] == frontend["backendModuleId"] == "analysis-areas"
-    assert manifest["version"] == frontend["version"] == package["version"] == "1.0.0"
+    assert manifest["version"] == frontend["version"] == package["version"] == "1.1.0"
     assert 'name = "ocp-module-analysis-areas"' in pyproject
-    assert 'version = "1.0.0"' in pyproject
+    assert 'version = "1.1.0"' in pyproject
     assert manifest["backend"]["package"] == "ocp-module-analysis-areas"
     assert manifest["frontend"]["package"] == "@open-city-planner/analysis-areas"
     assert manifest["requires"]["sdk"] == ">=1.9.0,<2.0.0"
@@ -122,10 +122,10 @@ def test_built_wheel_has_one_namespace_entry_point_and_migrations() -> None:
         roots = {name.split("/", 1)[0] for name in names}
         assert roots == {
             "ocp_module_analysis_areas",
-            "ocp_module_analysis_areas-1.0.0.dist-info",
+            "ocp_module_analysis_areas-1.1.0.dist-info",
         }
         entry_points = archive.read(
-            "ocp_module_analysis_areas-1.0.0.dist-info/entry_points.txt"
+            "ocp_module_analysis_areas-1.1.0.dist-info/entry_points.txt"
         ).decode()
         assert "[open_city_planner.modules]" in entry_points
         assert "analysis-areas = ocp_module_analysis_areas.module:DEFINITION" in entry_points

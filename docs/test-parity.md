@@ -2,17 +2,18 @@
 
 The extraction found 21 directly relevant host test/fixture files containing 86
 test cases (47 backend, 39 frontend) and preserves all 21 files under
-`tests/host-baseline`. Standalone runners add 10 focused contract tests (5
-backend, 5 frontend), for 96 retained or added cases. No source test was deleted
-from the host. The 86 full-host cases keep their original host runner; the 10 new
-cases run directly in this repository.
+`tests/host-baseline`. Standalone runners add focused backend and frontend
+contract/characterization coverage, including the ported Wikidata cases. No
+source test was deleted from the host. Full-host cases keep their original host
+runner; standalone cases run directly in this repository.
 
 | Host test | Standalone status |
 | --- | --- |
 | `backend/tests/modules/analysis_areas/test_analysis_areas_module.py` | preserved snapshot; identity/persistence/import behavior also covered by standalone backend contracts and pinned-host verifier |
 | `test_analysis_areas_characterization.py`, `test_analysis_area_public_api.py` | preserved; route set characterized locally |
 | `test_analysis_areas.py`, `test_analysis_area_analytics_performance.py` | preserved; executed in full host/PostGIS environment |
-| `test_flensburg_statistics.py`, `test_osm_sync.py`, `test_wikidata_enrichment.py` | preserved as cross-domain compatibility tests |
+| `test_flensburg_statistics.py`, `test_osm_sync.py` | preserved as cross-domain compatibility tests; OSM porting remains blocked |
+| `test_wikidata_enrichment.py` | matching, provider, cache, error, idempotency and released-session behavior ported to `backend/tests/test_wikidata.py` |
 | `analysis-areas-module.test.ts` | preserved; routes/navigation/map definitions covered locally and by host frontend preflight |
 | `analysis-area-overview*.test.ts`, `analysis-area-pages.test.ts`, `analysis-areas-ui.test.ts`, `area-poi-navigation.test.ts`, `area-statistics.test.ts` | preserved; core source/UI contracts covered locally; SSR cases remain host-run |
 | four `area-*.spec.ts` E2E files | preserved; remain host Playwright tests because they require the full application and seeded database |

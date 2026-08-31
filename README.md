@@ -1,10 +1,10 @@
 # Analysis Areas for Open City Planner
 
-Standalone full-stack OCP module extracted losslessly from the built-in
+Standalone full-stack OCP module extracted from the built-in
 `analysis-areas` module in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
-Version `1.0.0` is validated against host commit
+Version `1.1.0` is validated against host commit
 `81844b666aca8356f9c5cb9a86f00cf15b784f79` on
 `staging/epic-91-modular-host`. This repository is the future source of truth;
 the built-in remains in the host checkout and is excluded at composition time.
@@ -47,9 +47,24 @@ scripts/build-bundle
 scripts/host-contract-test
 ```
 
-The resulting files are `dist/analysis-areas-1.0.0.ocp` and its `.sha256`.
+The resulting files are `dist/analysis-areas-1.1.0.ocp` and its `.sha256`.
 The `.ocp` is built by the pinned host's v1 builder, not by repository-local ZIP
 code.
+
+## Wikidata operations
+
+The backend registers `analysis-areas.wikidata-refresh` with the public Module
+Job Registry. It also publishes the versioned service contract
+`analysis-areas.wikidata-maintenance` (version 1), whose `sync(force=...)` and
+`set_manual_match(area, qid, allow_name_mismatch=...)` methods preserve the old
+refresh and manual-assignment capabilities. Reads, provider calls and writes use
+separate phases, so Wikidata latency never retains a checked-out DB session.
+
+The pinned Host has no generic CLI for running registered jobs or passing
+arguments to module maintenance commands. Therefore the old three Host-specific
+CLI entry points cannot yet be replaced by a documented operator command. This
+and the OSM postprocessing/event dependencies are precise blocking contracts,
+not removed functionality; see the parity inventory before any Host cleanup.
 
 ## Installation and cutover
 
@@ -58,8 +73,8 @@ Select the external owner through the shared host composition setting:
 ```bash
 cd open-city-planner/backend
 export OCP_EXCLUDED_BUILTIN_MODULES=analysis-areas
-uv run python -m app.cli.modules verify analysis-areas-1.0.0.ocp
-uv run python -m app.cli.modules install analysis-areas-1.0.0.ocp
+uv run python -m app.cli.modules verify analysis-areas-1.1.0.ocp
+uv run python -m app.cli.modules install analysis-areas-1.1.0.ocp
 uv run python -m app.cli.modules enable analysis-areas
 ```
 
@@ -80,6 +95,9 @@ polygon query/analytics and statistics capabilities exclusively through its
 `ModuleContext`. The installable Python package has no private Host imports.
 Analysis-Areas-specific schemas, filter parsing, cache keys and the spatial POI
 query remain module-owned.
+Wikidata is a module-owned external-provider adapter. It prefers the SDK HTTP
+port and uses its declared `httpx` dependency with explicit timeout/User-Agent
+when the pinned Host leaves that optional port unwired.
 
 Existing Alembic IDs and their host-chain `down_revision` links are not renamed.
 The module declares all four IDs explicitly through the SDK 1.9 adoption contract;
@@ -95,6 +113,7 @@ Detailed evidence:
 - [migration inventory](docs/migration-inventory.md)
 - [import inventory](docs/import-inventory.md)
 - [functional parity](docs/functional-parity.md)
+- [OSM/Wikidata parity and blocking contracts](docs/sync-wikidata-parity.md)
 
 ## Host pin updates
 
@@ -124,9 +143,9 @@ extracted from Open City Planner built-in module.”
 
 ## Cutover preconditions
 
-Do not remove the built-in until standalone CI, v1.0.0 release, registry artifact
-verification, install/lifecycle, migration and existing-data compatibility, API,
-frontend and E2E parity are confirmed. Never activate built-in and external
-`analysis-areas` simultaneously.
+Do not remove the built-in until the blocking OSM/event/cache/operations contracts
+in the parity inventory are available and the resulting sync is verified, in
+addition to release, registry, lifecycle, migration, API, frontend and E2E gates.
+Never activate built-in and external `analysis-areas` simultaneously.
 
 License: AGPL-3.0-only. OpenStreetMap-derived data remains subject to ODbL.

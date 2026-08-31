@@ -6,6 +6,8 @@ from typing import Protocol
 
 SERVICE_ID = "analysis-areas.lookup"
 SERVICE_VERSION = 1
+MAINTENANCE_SERVICE_ID = "analysis-areas.wikidata-maintenance"
+MAINTENANCE_SERVICE_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +26,20 @@ class AnalysisAreaGeometry:
     geometry: dict[str, object]
 
 
+@dataclass(frozen=True, slots=True)
+class WikidataSyncResult:
+    checked: int = 0
+    osm_wikidata: int = 0
+    osm_wikipedia: int = 0
+    search: int = 0
+    manual: int = 0
+    not_found: int = 0
+    ambiguous: int = 0
+    invalid: int = 0
+    conflicts: int = 0
+    errors: tuple[str, ...] = ()
+
+
 class AnalysisAreaQueryService(Protocol):
     async def list_areas(
         self, *, area_type: str | None = None, parent_id: str | None = None
@@ -40,10 +56,26 @@ class AnalysisAreaQueryService(Protocol):
     async def list_children(self, slug: str) -> Sequence[AnalysisAreaSummary]: ...
 
 
+class WikidataMaintenanceService(Protocol):
+    async def sync(self, *, force: bool = False) -> WikidataSyncResult: ...
+
+    async def set_manual_match(
+        self,
+        reference: str,
+        qid: str,
+        *,
+        allow_name_mismatch: bool = False,
+    ) -> None: ...
+
+
 __all__ = [
+    "MAINTENANCE_SERVICE_ID",
+    "MAINTENANCE_SERVICE_VERSION",
     "SERVICE_ID",
     "SERVICE_VERSION",
     "AnalysisAreaGeometry",
     "AnalysisAreaQueryService",
     "AnalysisAreaSummary",
+    "WikidataMaintenanceService",
+    "WikidataSyncResult",
 ]

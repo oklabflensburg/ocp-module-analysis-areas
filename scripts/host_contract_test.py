@@ -145,7 +145,7 @@ def backend_runtime_check(
 ) -> None:
     probe = """
 from app.core.config import get_settings
-from app.main import app
+from app.main import app, module_runtime
 from app.platform.modules import EntryPointModuleDiscovery, FirstPartyModuleDiscovery
 from app.platform.modules.runtime import resolve_module_definitions
 
@@ -170,6 +170,10 @@ for expected in (
     "/api/v1/analysis-areas/{area_id}",
 ):
     assert expected in paths, expected
+assert module_runtime.job_registry is not None
+assert {item.job_id for item in module_runtime.job_registry.jobs} >= {
+    "analysis-areas.wikidata-refresh"
+}
 """
     run((str(python), "-c", probe), cwd=backend, environment=environment)
 
