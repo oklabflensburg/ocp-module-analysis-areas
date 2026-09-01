@@ -1,8 +1,8 @@
 # OSM/Wikidata parity matrix
 
 Historical implementation reference: `open-city-planner@4468b0414cff4370b96023eb2ff578b2f07f71fd^`.
-Current production contract: `open-city-planner@e1d7921698bb030f9e01de9ad16a9d85cb334b26`,
-Backend Module SDK `1.12.0`.
+Current production contract: `open-city-planner@3bf1d00c687dd5ff9a5e912fd947d2d2d16dc667`,
+Backend Module SDK `1.13.0`.
 
 | Historical function | New owner / implementation | Public Host dependency | Tests | Status |
 | --- | --- | --- | --- | --- |
@@ -20,8 +20,9 @@ Backend Module SDK `1.12.0`.
 | Wikidata bulk persistence | module short write phase | DB plus `CacheGenerationPort.bump` | one bump for 1+ writes, none for zero writes | complete |
 | Manual Wikidata assignment | `analysis-areas.wikidata-maintenance@1` | HTTP, DB and generation port | validation and rollback tests | complete; row and generation roll back together |
 | Scheduled Wikidata refresh | `analysis-areas.wikidata-refresh` | normal scheduler context | Host registration/lifecycle test | complete |
-| Polygon spatial selection | Host read-only matcher resolved by module | `platform.polygon-spatial-match@1` | Host service-resolution check | contract available |
-| `polygon_analysis_areas` reconcile | remains module-owned | missing public UUID-to-internal-ID lookup | architecture/import guards | **blocked** |
+| Polygon spatial selection | Host read-only matcher resolved by module | `platform.polygon-spatial-match@1` | unit and real Host chain tests | complete |
+| Polygon identity resolution | Host-owned batched UUID-to-integer-ID lookup | `platform.polygon-identity@1` | batch/missing/Host chain tests | complete |
+| `polygon_analysis_areas` reconcile | module `PolygonAnalysisAreaReconciler` | module DB session and both Polygon contracts | create/update/delete/no-op/missing/rollback tests | complete |
 | Optional social-change publication | foreign social domain | no public publication event contract | historical audit | not restored; normal OSM postprocess historically passed `publish_relevant_updates=False` |
 
 ## OSM semantics
@@ -49,9 +50,11 @@ converges on the same domain state.
 ## Transactions
 
 OSM snapshot reads and module writes share a Host-managed session. Area and parent
-mutations are followed by one transactional generation bump and the caller-owned
-commit. OSM synchronization retains the historical `analysis-areas` and
-`analytics` generation effects.
+mutations, Polygon matching, identity resolution and relation reconciliation are
+followed by one transactional generation bump and the caller-owned commit. OSM
+synchronization retains the historical `analysis-areas` and `analytics`
+generation effects. An unchanged duplicate event performs no relation write and
+no generation bump.
 
 Wikidata uses three short phases: snapshot read and release, external HTTP without
 a DB session, then a new write session. Bulk sync performs zero bumps for zero
@@ -59,23 +62,20 @@ writes and one bump for one or more writes. Manual assignment updates the row,
 bumps `analysis-areas`, and commits in that order. Module-cache clearing is an
 additional post-commit optimization, never a replacement for the shared bump.
 
-## Exact remaining blocker
+## Polygon relation semantics
 
-`platform.polygon-spatial-match@1` returns canonical Polygon UUID strings. The
-adopted `polygon_analysis_areas.polygon_id` foreign key and public `PolygonScope`
-use the Host's internal positive integer Polygon IDs. `PolygonQueryPort` only
-lists projections for an already-known integer scope; it has no UUID lookup.
+The stable Analysis Area UUID is the spatial request `external_id`. Historical
+`area_type` values (`MUNICIPALITY`, `DISTRICT`, `QUARTER`) are the selection
+groups, preserving the former smallest-covering-area-per-type behavior. Polygon
+UUIDs from the matcher are resolved in one identity request. Desired state uses
+the existing unique key `(polygon_id, analysis_area_id)` and preserves the
+historical `POINT_ON_SURFACE` assignment and unrounded overlap ratio.
 
-Consequently the module cannot persist desired matches without directly reading
-`user_polygons`, which is forbidden. It also cannot safely change the adopted
-relation to UUIDs because existing query and analytics ports require integer
-scopes. The smallest missing generic contract is a read-only stable Polygon UUID
-to internal `PolygonScope` ID resolver (or equivalent relation-safe token that
-the existing public query/analytics ports accept).
-
-No `user_polygons` ORM/SQL fallback is present. Until that generic contract is
-available, Polygon match resolution is verified at registration, but relation
-mutation is deliberately not executed or claimed.
+Complete results create missing rows, update changed overlap/type values, delete
+stale rows and leave identical rows untouched. If any identity is missing, the
+entire relation phase is a no-op and reports the missing UUIDs; no stale deletion
+is inferred. The module reads no `user_polygons` table and imports no private Host
+implementation.
 
 ## Operator path
 

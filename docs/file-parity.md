@@ -1,7 +1,7 @@
 # File parity
 
-Pinned Host: `open-city-planner@e1d7921698bb030f9e01de9ad16a9d85cb334b26`
-(merge commit of Host PR #205, Backend Module SDK 1.12.0).
+Pinned Host: `open-city-planner@3bf1d00c687dd5ff9a5e912fd947d2d2d16dc667`
+(merge commit of Host PR #207, Backend Module SDK 1.13.0).
 
 ## Backend
 
@@ -13,7 +13,9 @@ and `application/legacy_queries.py`. The earlier removal of
 `application/osm_sync.py`. Wikidata domain values, provider integration and application
 workflow live in `domain/wikidata.py`, `integrations/wikidata.py` and
 `application/wikidata.py`. The router is created at registration time with
-explicit public ports.
+explicit public ports. `application/polygon_reconcile.py` owns desired-state
+construction and persistence for `polygon_analysis_areas` while consuming only
+the public spatial-match and Polygon-identity contracts.
 
 The four files under
 `backend/src/ocp_module_analysis_areas/migrations/history/` remain byte-identical
@@ -66,9 +68,9 @@ copied or renamed as Analysis Areas code.
 - polygon UI/models, notification UI, OSM viewport store and statistics storage;
 - Statistics migration `20260816_0016` and all unrelated Host-chain migrations;
 - generic argument-bearing module-operation CLI convenience;
-- Polygon UUID-to-internal-scope resolution, documented in
-  `sync-wikidata-parity.md`.
+- Polygon storage and UUID ownership (`user_polygons`), exposed read-only through
+  the public contracts documented in `sync-wikidata-parity.md`.
 
-These are consumers, platform primitives, or other domain owners. Wikidata
-behavior and OSM area synchronization are now module-owned; the remaining polygon
-relation blocker is explicit and no private implementation was copied or relabeled.
+These are consumers, platform primitives, or other domain owners. Wikidata, OSM
+area synchronization and Polygon relation reconciliation are module-owned; no
+private implementation was copied or relabeled.

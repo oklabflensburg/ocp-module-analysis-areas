@@ -18,6 +18,11 @@ from app.platform.modules.sdk import (
 )
 from sqlalchemy import text
 
+from .polygon_reconcile import (
+    PolygonAnalysisAreaReconciler,
+    PolygonAnalysisAreaReconcileResult,
+)
+
 PAGE_SIZE = 500
 
 
@@ -54,6 +59,7 @@ class AnalysisAreaSyncResult:
     removed: int = 0
     counts: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    polygon_relations: PolygonAnalysisAreaReconcileResult | None = None
 
 
 NORMALIZE_SQL = text("""
@@ -154,6 +160,7 @@ class OsmAnalysisAreaSync:
         database: DatabaseSessionProvider,
         snapshots: OsmSnapshotQueryPort,
         generations: CacheGenerationPort,
+        polygon_relations: PolygonAnalysisAreaReconciler,
         *,
         municipality_name: str,
         logger: Any,
@@ -161,6 +168,7 @@ class OsmAnalysisAreaSync:
         self._database = database
         self._snapshots = snapshots
         self._generations = generations
+        self._polygon_relations = polygon_relations
         self._municipality_name = municipality_name
         self._logger = logger
 
@@ -240,7 +248,24 @@ class OsmAnalysisAreaSync:
                 report.counts[area_type] += 1
             parent_result = await session.execute(PARENT_SQL)
             parent_changes = max(int(parent_result.rowcount or 0), 0)
-            if report.created or report.updated or parent_changes:
+            report.polygon_relations = await self._polygon_relations.reconcile(session)
+            if report.polygon_relations.missing_polygon_uuids:
+                self._logger.warning(
+                    "Analysis Areas polygon relation reconcile skipped stale cleanup",
+                    extra={
+                        "polygon_matches": report.polygon_relations.matches,
+                        "polygon_identities_resolved": report.polygon_relations.resolved_identities,
+                        "polygon_identities_missing": len(
+                            report.polygon_relations.missing_polygon_uuids
+                        ),
+                    },
+                )
+            if (
+                report.created
+                or report.updated
+                or parent_changes
+                or report.polygon_relations.changed
+            ):
                 await self._generations.bump(session, ("analysis-areas", "analytics"))
             await session.commit()
 
@@ -253,6 +278,15 @@ class OsmAnalysisAreaSync:
                 "areas_updated": report.updated,
                 "areas_unchanged": report.unchanged,
                 "areas_removed": report.removed,
+                "polygon_matches": report.polygon_relations.matches,
+                "polygon_identities_resolved": report.polygon_relations.resolved_identities,
+                "polygon_identities_missing": len(
+                    report.polygon_relations.missing_polygon_uuids
+                ),
+                "relations_created": report.polygon_relations.created,
+                "relations_updated": report.polygon_relations.updated,
+                "relations_deleted": report.polygon_relations.deleted,
+                "relations_unchanged": report.polygon_relations.unchanged,
             },
         )
         return report

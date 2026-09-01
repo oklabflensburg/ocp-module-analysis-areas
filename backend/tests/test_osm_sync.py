@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from datetime import UTC, datetime
 
 import pytest
@@ -18,6 +19,9 @@ from ocp_module_analysis_areas.application.osm_sync import (
     UPSERT_SQL,
     OsmAnalysisAreaSync,
     PreparedFeature,
+)
+from ocp_module_analysis_areas.application.polygon_reconcile import (
+    PolygonAnalysisAreaReconcileResult,
 )
 
 
@@ -140,6 +144,14 @@ class Logger:
     def info(self, *_args, **_kwargs):
         pass
 
+    def warning(self, *_args, **_kwargs):
+        pass
+
+
+class PolygonRelations:
+    async def reconcile(self, _session):
+        return PolygonAnalysisAreaReconcileResult()
+
 
 @pytest.mark.asyncio
 async def test_osm_pagination_upsert_and_duplicate_delivery_are_idempotent() -> None:
@@ -150,6 +162,7 @@ async def test_osm_pagination_upsert_and_duplicate_delivery_are_idempotent() -> 
         database,
         snapshots,
         generations,
+        PolygonRelations(),
         municipality_name="Flensburg",
         logger=Logger(),
     )
@@ -199,7 +212,12 @@ async def test_containment_uses_normalized_geometry() -> None:
 
     session = CoversSession()
     service = OsmAnalysisAreaSync(
-        Database(), Snapshots(), Generations(), municipality_name="Flensburg", logger=Logger()
+        Database(),
+        Snapshots(),
+        Generations(),
+        PolygonRelations(),
+        municipality_name="Flensburg",
+        logger=Logger(),
     )
 
     assert await service._covers(
@@ -211,6 +229,61 @@ async def test_containment_uses_normalized_geometry() -> None:
         "container": b"normalized-container",
         "candidate": b"normalized-candidate",
     }
+
+
+@pytest.mark.asyncio
+async def test_relation_and_generation_changes_roll_back_on_commit_failure() -> None:
+    database = Database()
+    initial = OsmAnalysisAreaSync(
+        database,
+        Snapshots(),
+        Generations(),
+        PolygonRelations(),
+        municipality_name="Flensburg",
+        logger=Logger(),
+    )
+    await initial.sync()
+    database.state.relation = "old"
+    database.state.generation = 7
+    before = deepcopy(database.state.__dict__)
+
+    class FailingSession(Session):
+        async def commit(self):
+            raise RuntimeError("simulated commit failure")
+
+    class FailingDatabase:
+        @asynccontextmanager
+        async def session(self):
+            snapshot = deepcopy(database.state.__dict__)
+            try:
+                yield FailingSession(database.state)
+            except Exception:
+                database.state.__dict__.clear()
+                database.state.__dict__.update(snapshot)
+                raise
+
+    class ChangedRelations:
+        async def reconcile(self, session):
+            session.state.relation = "new"
+            return PolygonAnalysisAreaReconcileResult(created=1)
+
+    class TransactionalGenerations:
+        async def bump(self, session, resources):
+            assert tuple(resources) == ("analysis-areas", "analytics")
+            session.state.generation += 1
+
+    service = OsmAnalysisAreaSync(
+        FailingDatabase(),
+        Snapshots(),
+        TransactionalGenerations(),
+        ChangedRelations(),
+        municipality_name="Flensburg",
+        logger=Logger(),
+    )
+
+    with pytest.raises(RuntimeError, match="commit failure"):
+        await service.sync()
+    assert database.state.__dict__ == before
 
 
 def test_osm_sql_only_writes_module_owned_tables_and_preserves_manual_match() -> None:

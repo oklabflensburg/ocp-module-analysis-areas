@@ -8,6 +8,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from types import ModuleType
+from uuid import UUID
 
 try:
     import app.platform.modules.sdk  # noqa: F401
@@ -67,6 +68,41 @@ except ModuleNotFoundError:
         items: tuple[OsmFeatureSnapshot, ...]
         next_cursor: OsmFeatureCursor | None = None
 
+    @dataclass(frozen=True, slots=True)
+    class PolygonSpatialArea:
+        external_id: str
+        selection_group: str
+        geometry_wkb: bytes
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonSpatialMatchRequest:
+        areas: tuple[PolygonSpatialArea, ...]
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonSpatialMatch:
+        polygon_id: str
+        external_area_id: str
+        selection_group: str
+        overlap_ratio: float | None
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonSpatialMatchResult:
+        matches: tuple[PolygonSpatialMatch, ...]
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonIdentity:
+        id: int
+        uuid: UUID
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonIdentityRequest:
+        polygon_uuids: tuple[UUID, ...]
+
+    @dataclass(frozen=True, slots=True)
+    class PolygonIdentityResult:
+        resolved: tuple[PolygonIdentity, ...]
+        missing: tuple[UUID, ...]
+
     for name in (
         "CachePort",
         "CacheGenerationPort",
@@ -74,7 +110,9 @@ except ModuleNotFoundError:
         "HttpClientFactoryPort",
         "OsmSnapshotQueryPort",
         "PolygonAnalyticsPort",
+        "PolygonIdentityPort",
         "PolygonQueryPort",
+        "PolygonSpatialMatchPort",
     ):
         setattr(sdk_module, name, Port)
     sdk_module.OsmFeatureCursor = OsmFeatureCursor
@@ -83,7 +121,14 @@ except ModuleNotFoundError:
     sdk_module.OsmSnapshotQuery = OsmSnapshotQuery
     sdk_module.OsmTagFilter = OsmTagFilter
     sdk_module.PolygonFilterValues = PolygonFilterValues
+    sdk_module.PolygonIdentity = PolygonIdentity
+    sdk_module.PolygonIdentityRequest = PolygonIdentityRequest
+    sdk_module.PolygonIdentityResult = PolygonIdentityResult
     sdk_module.PolygonScope = PolygonScope
+    sdk_module.PolygonSpatialArea = PolygonSpatialArea
+    sdk_module.PolygonSpatialMatch = PolygonSpatialMatch
+    sdk_module.PolygonSpatialMatchRequest = PolygonSpatialMatchRequest
+    sdk_module.PolygonSpatialMatchResult = PolygonSpatialMatchResult
     sys.modules.update(
         {
             "app": app_module,

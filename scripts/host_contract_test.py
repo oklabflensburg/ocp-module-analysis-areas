@@ -154,11 +154,14 @@ from app.platform.modules.sdk import (
     OSM_POSTPROCESSING_COMPLETED_EVENT,
     OSM_SNAPSHOT_QUERY_SERVICE_ID,
     OSM_SNAPSHOT_QUERY_SERVICE_VERSION,
+    POLYGON_IDENTITY_SERVICE_ID,
+    POLYGON_IDENTITY_SERVICE_VERSION,
     POLYGON_SPATIAL_MATCH_SERVICE_ID,
     POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
     OsmSnapshotQueryPort,
     OsmPostprocessingCompleted,
     PolygonSpatialMatchPort,
+    PolygonIdentityPort,
     event_envelope,
 )
 from ocp_module_analysis_areas.contracts import (
@@ -221,6 +224,11 @@ assert services.require(
     PolygonSpatialMatchPort,
     service_id=POLYGON_SPATIAL_MATCH_SERVICE_ID,
     version=POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
+) is not None
+assert services.require(
+    PolygonIdentityPort,
+    service_id=POLYGON_IDENTITY_SERVICE_ID,
+    version=POLYGON_IDENTITY_SERVICE_VERSION,
 ) is not None
 subscription = event_bus.subscription("analysis-areas.sync-after-osm-postprocessing")
 assert subscription is not None
@@ -482,7 +490,7 @@ def main() -> None:
                 ),
                 str(
                     repository
-                    / "tests/host-baseline/backend/tests/test_sync_sdk_112_contract.py"
+                    / "tests/host-baseline/backend/tests/test_sync_sdk_113_contract.py"
                 ),
                 "-q",
             ),
@@ -582,7 +590,8 @@ def main() -> None:
             "installed-package import guard; "
             "exclusive ownership; duplicate fail-fast; normal CLI enable/disable/re-enable; "
             "wikidata job/service/capability present; OSM/polygon services resolved; "
-            "OSM subscriber dispatched; real PostGIS snapshot/upsert/generation test; "
+            "OSM subscriber dispatched; real PostGIS spatial-match/identity/relation/"
+            "upsert/generation chain; "
             "backend/API characterization and frontend route/map discovery; "
             "built-in-free detail-map ownership and social-preview ready wiring; "
             "modules:check; typecheck; build; "

@@ -7,6 +7,11 @@ contract/characterization coverage, including the ported Wikidata cases. No
 source test was deleted from the host. Full-host cases keep their original host
 runner; standalone cases run directly in this repository.
 
+Polygon relation coverage includes create, changed-overlap update, stale delete,
+unchanged second run, duplicate-event convergence, multiple selection groups,
+single batched identity lookup, missing-identity fail-safe, transactional rollback
+and the real pinned-Host spatial-match → identity → module persistence chain.
+
 | Host test | Standalone status |
 | --- | --- |
 | `backend/tests/modules/analysis_areas/test_analysis_areas_module.py` | preserved snapshot; identity/persistence/import behavior also covered by standalone backend contracts and pinned-host verifier |

@@ -22,9 +22,12 @@
   failures remain isolated per area.
 - [x] OSM area sync is module-owned, paginated and triggered by
   `osm.postprocessing-completed@1`; duplicate delivery is idempotent.
-- [ ] Polygon assignment persistence remains blocked because the spatial-match
-  result exposes stable Polygon UUIDs while the adopted relation and public
-  `PolygonScope` require internal integer IDs. No public UUID lookup exists.
+- [x] Polygon assignments use module-owned Analysis Area UUIDs and area-type
+  selection groups with `platform.polygon-spatial-match@1`, batch UUID-to-ID
+  resolution through `platform.polygon-identity@1`, and module-owned create,
+  update, stale-delete and no-op reconciliation.
+- [x] Missing Polygon identities are reported and skip the complete relation
+  reconcile, so incomplete identity lookup never causes destructive cleanup.
 - [ ] Optional historical social-change publication is not restored; the normal
   OSM postprocess path historically disabled it, so production synchronization is
   unaffected.
@@ -39,7 +42,6 @@
 - [x] Missing cutover configuration fails fast for duplicate backend and frontend
   module IDs; duplicate Host/module migration revisions also fail fast.
 
-The only required Issue #5 blocker identified by this implementation is the
-Polygon UUID-to-internal-ID mapping contract described above. A generic manual
-operator CLI remains a convenience gap; manual mutation is safely available
-through the versioned maintenance service.
+No functional Issue #5 blocker remains. A generic manual operator CLI remains a
+convenience gap; manual mutation is safely available through the versioned
+maintenance service.
