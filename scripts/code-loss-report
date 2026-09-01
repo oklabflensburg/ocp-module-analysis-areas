@@ -38,6 +38,6 @@ printf '%s\n' \
   'backend/app/cli/sync_wikidata.py -> application/wikidata.py; scheduled job and public service active' \
   'backend/app/cli/set_area_wikidata.py -> public Wikidata maintenance service; generic CLI convenience absent' \
   'backend/app/services/wikidata_enrichment.py -> domain/application/integrations/wikidata.py' \
-  'backend/app/cli/postprocess_osm.py -> osm.postprocessing-completed@1 subscriber; polygon relation blocked on UUID mapping'
+  'backend/app/cli/postprocess_osm.py -> osm.postprocessing-completed@1 subscriber and public-contract polygon relation reconcile'
 
 exit "$unclassified"

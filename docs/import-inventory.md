@@ -1,7 +1,7 @@
 # Import inventory
 
-Pinned contract: `open-city-planner@e1d7921698bb030f9e01de9ad16a9d85cb334b26`,
-Backend Module SDK `1.12.0`.
+Pinned contract: `open-city-planner@3bf1d00c687dd5ff9a5e912fd947d2d2d16dc667`,
+Backend Module SDK `1.13.0`.
 
 | Standalone code | Imported surface | Status |
 | --- | --- | --- |
