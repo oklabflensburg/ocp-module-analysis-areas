@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from app.platform.modules.sdk import CachePort, DatabaseSessionProvider
+from app.platform.modules.sdk import CacheGenerationPort, CachePort, DatabaseSessionProvider
 from sqlalchemy import text
 
 from ..contracts import WikidataSyncResult
@@ -75,6 +75,7 @@ UPDATE analysis_areas SET
   wikidata_match_confidence=:confidence, wikidata_last_checked_at=now(),
   wikidata_verified=false, updated_at=now()
 WHERE id=:area_id AND wikidata_match_source IS DISTINCT FROM 'MANUAL'
+RETURNING id
 """)
 
 MANUAL_SQL = text("""
@@ -84,6 +85,7 @@ UPDATE analysis_areas SET wikidata_id=:qid, wikipedia_title=:title,
   wikidata_match_confidence=1, wikidata_verified=true,
   wikidata_last_checked_at=now(), updated_at=now()
 WHERE id=:area_id
+RETURNING id
 """)
 
 
@@ -120,12 +122,14 @@ class WikidataEnrichmentService:
         self,
         database: DatabaseSessionProvider,
         cache: CachePort,
+        cache_generations: CacheGenerationPort,
         client: WikidataClient,
         *,
         stale_days: int,
     ) -> None:
         self._database = database
         self._cache = cache
+        self._cache_generations = cache_generations
         self._client = client
         self._stale_days = stale_days
 
@@ -219,12 +223,18 @@ class WikidataEnrichmentService:
             resolved.append((area.id, match))
             _count(report, match)
 
+        mutated = False
         if resolved:
             async with self._database.session() as session:
+                writes = 0
                 for area_id, match in resolved:
-                    await _persist_match(session, area_id, match)
-                await session.commit()
-            await self._cache.clear()
+                    writes += int(await _persist_match(session, area_id, match))
+                if writes:
+                    await self._cache_generations.bump(session, ("analysis-areas",))
+                    await session.commit()
+                    mutated = True
+            if mutated:
+                await self._cache.clear()
         return WikidataSyncResult(
             checked=report.checked,
             osm_wikidata=report.osm_wikidata,
@@ -259,7 +269,7 @@ class WikidataEnrichmentService:
                 f"Area {area_name!r} does not match Wikidata label {entity.label!r}"
             )
         async with self._database.session() as session:
-            await session.execute(
+            result = await session.execute(
                 MANUAL_SQL,
                 {
                     "area_id": area_id,
@@ -269,6 +279,9 @@ class WikidataEnrichmentService:
                     "description": entity.description,
                 },
             )
+            if result.first() is None:
+                raise AreaNotFoundError(reference)
+            await self._cache_generations.bump(session, ("analysis-areas",))
             await session.commit()
         await self._cache.clear()
 
@@ -309,9 +322,9 @@ class WikidataEnrichmentService:
         return int(rows[0][0]), str(rows[0][1])
 
 
-async def _persist_match(session, area_id: int, match: Match) -> None:
+async def _persist_match(session, area_id: int, match: Match) -> bool:
     entity = match.entity
-    await session.execute(
+    result = await session.execute(
         PERSIST_SQL,
         {
             "area_id": area_id,
@@ -324,6 +337,7 @@ async def _persist_match(session, area_id: int, match: Match) -> None:
             "confidence": match.confidence,
         },
     )
+    return result.first() is not None
 
 
 def _count(report: _MutableReport, match: Match) -> None:

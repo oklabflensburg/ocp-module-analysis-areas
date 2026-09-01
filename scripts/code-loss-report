@@ -18,7 +18,7 @@ while IFS= read -r file; do
         state='REPLACED: application/queries.py + public SDK ports'
         ;;
       application/legacy_sync.py)
-        state='BLOCKED: docs/sync-wikidata-parity.md (OSM/event/cache/polygon contracts)'
+        state='REPLACED: application/osm_sync.py + public OSM/event/cache contracts'
         ;;
       integrations/legacy.py)
         state='REPLACED: public SDK ports; no private adapter'
@@ -34,10 +34,10 @@ done < <(find "$source" -type f -name '*.py' | sort)
 
 printf '\nHistorical workflow -> standalone owner/status\n'
 printf '%s\n' \
-  'backend/app/cli/sync_analysis_areas.py -> BLOCKED: documented public contracts' \
-  'backend/app/cli/sync_wikidata.py -> internal application/wikidata.py; automatic job and public service BLOCKED on transactional cache-generation bump' \
-  'backend/app/cli/set_area_wikidata.py -> internal application/wikidata.py; public maintenance and generic CLI blocked' \
+  'backend/app/cli/sync_analysis_areas.py -> application/osm_sync.py; automatic event trigger active' \
+  'backend/app/cli/sync_wikidata.py -> application/wikidata.py; scheduled job and public service active' \
+  'backend/app/cli/set_area_wikidata.py -> public Wikidata maintenance service; generic CLI convenience absent' \
   'backend/app/services/wikidata_enrichment.py -> domain/application/integrations/wikidata.py' \
-  'backend/app/cli/postprocess_osm.py -> BLOCKED: no public postprocessing event at Host pin'
+  'backend/app/cli/postprocess_osm.py -> osm.postprocessing-completed@1 subscriber; polygon relation blocked on UUID mapping'
 
 exit "$unclassified"

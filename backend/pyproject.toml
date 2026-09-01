@@ -1,6 +1,6 @@
 [project]
 name = "ocp-module-analysis-areas"
-version = "1.1.0"
+version = "1.2.0"
 description = "Analysis Areas module for Open City Planner"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -8,7 +8,6 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi>=0.116.1",
   "geoalchemy2>=0.17.1",
-  "httpx>=0.28.1",
   "pydantic>=2.11.7",
   "sqlalchemy>=2.0.42",
 ]
@@ -19,6 +18,7 @@ analysis-areas = "ocp_module_analysis_areas.module:DEFINITION"
 [project.optional-dependencies]
 dev = [
   "build==1.3.0",
+  "httpx>=0.28.1",
   "pytest>=8.4.1",
   "pytest-asyncio>=1.1.0",
   "pyyaml==6.0.3",

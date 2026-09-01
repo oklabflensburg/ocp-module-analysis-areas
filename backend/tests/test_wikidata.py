@@ -3,7 +3,6 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-import httpx
 import pytest
 
 from ocp_module_analysis_areas.application.wikidata import (
@@ -11,7 +10,6 @@ from ocp_module_analysis_areas.application.wikidata import (
     WikidataNameMismatchError,
 )
 from ocp_module_analysis_areas.domain.wikidata import AreaSnapshot, Match, WikidataEntity
-from ocp_module_analysis_areas.integrations import wikidata as wikidata_integration
 from ocp_module_analysis_areas.integrations.wikidata import (
     WikidataClient,
     WikidataProviderError,
@@ -51,6 +49,14 @@ class MemoryCache:
         count = len(self.values)
         self.values.clear()
         return count
+
+
+class Generations:
+    def __init__(self) -> None:
+        self.bumps: list[tuple[object, tuple[str, ...]]] = []
+
+    async def bump(self, session, resources) -> None:
+        self.bumps.append((session, tuple(resources)))
 
 
 class Response:
@@ -164,48 +170,21 @@ async def test_provider_retries_timeout_and_uses_negative_ttl() -> None:
 
 
 @pytest.mark.asyncio
-async def test_httpx_fallback_applies_policy_retries_and_closes_clients(monkeypatch) -> None:
-    clients = []
-    requests = []
-
-    class FallbackClient:
-        def __init__(self, *, timeout: float) -> None:
-            self.timeout = timeout
-            self.entered = False
-            self.closed = False
-            clients.append(self)
-
-        async def __aenter__(self):
-            self.entered = True
-            return self
-
-        async def __aexit__(self, *_args):
-            self.closed = True
-
-        async def request(self, method, url, **kwargs):
-            requests.append((method, url, kwargs))
-            if len(requests) == 1:
-                raise httpx.ReadTimeout("temporary timeout")
-            return Response(200, entity_payload())
-
-    monkeypatch.setattr(wikidata_integration.httpx, "AsyncClient", FallbackClient)
+async def test_public_http_port_applies_policy_retries_and_closes_clients() -> None:
+    http = HttpClient([RuntimeError("temporary transport error"), Response(200, entity_payload())])
+    factory = HttpFactory(http)
     provider = WikidataClient(
-        None,
+        factory,
         MemoryCache(),
         api_url="https://www.wikidata.org/w/api.php",
         cache_ttl_seconds=700,
         negative_cache_ttl_seconds=80,
         search_limit=8,
-        timeout_seconds=4.5,
-        user_agent="analysis-areas-test/1.0",
         sleep=lambda _delay: _completed(),
     )
 
     assert (await provider.entity("Q482")).id == "Q482"
-    assert len(requests) == 2
-    assert all(client.timeout == 4.5 for client in clients)
-    assert all(client.entered and client.closed for client in clients)
-    assert requests[1][2]["headers"]["User-Agent"] == "analysis-areas-test/1.0"
+    assert http.calls == 2
 
 
 @pytest.mark.asyncio
@@ -236,7 +215,7 @@ class MatchingClient:
 
 @pytest.mark.asyncio
 async def test_explicit_osm_qid_wins_and_conflict_is_preserved() -> None:
-    service = WikidataEnrichmentService(None, None, MatchingClient(), stale_days=90)
+    service = WikidataEnrichmentService(None, None, None, MatchingClient(), stale_days=90)
     match = await service.resolve_area(
         area(source_osm_wikidata="Q482", source_osm_wikipedia="de:Other")
     )
@@ -254,7 +233,7 @@ async def test_invalid_explicit_qid_never_falls_back() -> None:
         def __getattr__(self, _name):
             raise AssertionError("provider must not be called")
 
-    service = WikidataEnrichmentService(None, None, NoCalls(), stale_days=90)
+    service = WikidataEnrichmentService(None, None, None, NoCalls(), stale_days=90)
     assert await service.resolve_area(area(source_osm_wikidata="Q1;Q2")) == Match(
         "INVALID", "OSM_WIKIDATA"
     )
@@ -318,7 +297,7 @@ class Session:
         if str(statement).lstrip().startswith("SELECT"):
             return Rows(self.rows)
         self.writes.append(parameters)
-        return Rows([])
+        return Rows([(parameters.get("area_id"),)])
 
     async def commit(self):
         self.commits += 1
@@ -376,7 +355,7 @@ class StatefulDatabase:
                     return Rows([{field: database.row[field] for field in fields}])
                 database.row["wikidata_match_status"] = parameters["status"]
                 database.row["wikidata_last_checked_at"] = datetime.now(UTC)
-                return Rows([])
+                return Rows([(parameters["area_id"],)])
 
             async def commit(self):
                 database.commits += 1
@@ -411,12 +390,16 @@ async def test_sync_releases_read_session_before_network_and_reuses_existing_row
             return WikidataEntity(qid, "Flensburg", "kreisfreie Stadt", "Flensburg")
 
     cache = MemoryCache()
-    service = WikidataEnrichmentService(database, cache, NetworkClient(), stale_days=90)
+    generations = Generations()
+    service = WikidataEnrichmentService(
+        database, cache, generations, NetworkClient(), stale_days=90
+    )
     report = await service.sync()
     assert report.checked == report.osm_wikidata == 1
     assert write.writes[0]["area_id"] == 17
     assert write.commits == 1
     assert cache.clears == 1
+    assert generations.bumps == [(write, ("analysis-areas",))]
 
 
 @pytest.mark.asyncio
@@ -440,7 +423,9 @@ async def test_provider_error_isolated() -> None:
             raise TimeoutError
 
     cache = MemoryCache()
-    service = WikidataEnrichmentService(database, cache, FailedClient(), stale_days=90)
+    service = WikidataEnrichmentService(
+        database, cache, Generations(), FailedClient(), stale_days=90
+    )
     first = await service.sync()
     assert first.errors == ("Flensburg: TimeoutError",)
     assert cache.clears == 0
@@ -471,7 +456,10 @@ async def test_second_normal_run_skips_fresh_persisted_match() -> None:
             return WikidataEntity(qid, "Flensburg", "kreisfreie Stadt", "Flensburg")
 
     cache = MemoryCache()
-    service = WikidataEnrichmentService(database, cache, NetworkClient(), stale_days=90)
+    generations = Generations()
+    service = WikidataEnrichmentService(
+        database, cache, generations, NetworkClient(), stale_days=90
+    )
 
     first = await service.sync()
     persisted_at = database.row["wikidata_last_checked_at"]
@@ -483,6 +471,7 @@ async def test_second_normal_run_skips_fresh_persisted_match() -> None:
     assert second.checked == 0
     assert database.provider_calls == 1
     assert database.commits == cache.clears == 1
+    assert len(generations.bumps) == 1
 
 
 @pytest.mark.asyncio
@@ -497,7 +486,10 @@ async def test_manual_assignment_validates_without_holding_a_database_session() 
             return WikidataEntity(qid, "Flensburg", "kreisfreie Stadt", "Flensburg")
 
     cache = MemoryCache()
-    service = WikidataEnrichmentService(database, cache, NetworkClient(), stale_days=90)
+    generations = Generations()
+    service = WikidataEnrichmentService(
+        database, cache, generations, NetworkClient(), stale_days=90
+    )
     await service.set_manual_match("flensburg-3017382", "Q482")
     assert write.writes == [
         {
@@ -509,6 +501,7 @@ async def test_manual_assignment_validates_without_holding_a_database_session() 
         }
     ]
     assert write.commits == cache.clears == 1
+    assert generations.bumps == [(write, ("analysis-areas",))]
 
 
 @pytest.mark.asyncio
@@ -519,6 +512,58 @@ async def test_manual_assignment_rejects_name_mismatch_unless_confirmed() -> Non
         async def entity(self, qid: str):
             return WikidataEntity(qid, "Berlin", None, "Berlin")
 
-    service = WikidataEnrichmentService(database, MemoryCache(), NetworkClient(), stale_days=90)
+    service = WikidataEnrichmentService(
+        database, MemoryCache(), Generations(), NetworkClient(), stale_days=90
+    )
     with pytest.raises(WikidataNameMismatchError):
         await service.set_manual_match("flensburg-3017382", "Q64")
+
+
+@pytest.mark.asyncio
+async def test_manual_assignment_rollback_keeps_row_and_generation_unchanged() -> None:
+    state = {"wikidata_id": None, "generation": 7}
+    calls = 0
+
+    class TransactionalDatabase:
+        @asynccontextmanager
+        async def session(self):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                yield Session([(23, "Flensburg")])
+                return
+
+            class Transaction:
+                pending_qid = state["wikidata_id"]
+                pending_generation = state["generation"]
+
+                async def execute(self, _statement, parameters):
+                    self.pending_qid = parameters["qid"]
+                    return Rows([(parameters["area_id"],)])
+
+                async def commit(self):
+                    raise RuntimeError("simulated commit failure")
+
+            yield Transaction()
+
+    class TransactionalGenerations:
+        async def bump(self, session, resources):
+            assert tuple(resources) == ("analysis-areas",)
+            session.pending_generation += 1
+
+    class NetworkClient:
+        async def entity(self, qid: str):
+            return WikidataEntity(qid, "Flensburg", None, "Flensburg")
+
+    cache = MemoryCache()
+    service = WikidataEnrichmentService(
+        TransactionalDatabase(),
+        cache,
+        TransactionalGenerations(),
+        NetworkClient(),
+        stale_days=90,
+    )
+    with pytest.raises(RuntimeError, match="commit failure"):
+        await service.set_manual_match("flensburg-3017382", "Q482")
+    assert state == {"wikidata_id": None, "generation": 7}
+    assert cache.clears == 0

@@ -1,16 +1,16 @@
 # File parity
 
-Pinned Host: `open-city-planner@81844b666aca8356f9c5cb9a86f00cf15b784f79`
-(merge commit of Host PR #193, Backend Module SDK 1.9.0).
+Pinned Host: `open-city-planner@e1d7921698bb030f9e01de9ad16a9d85cb334b26`
+(merge commit of Host PR #205, Backend Module SDK 1.12.0).
 
 ## Backend
 
 The module-owned files remain under `backend/src/ocp_module_analysis_areas/`.
-The SDK 1.9 cutover introduced `api/filters.py`, `application/cache.py`,
+The SDK cutover introduced `api/filters.py`, `application/cache.py`,
 `application/queries.py` and `settings.py`. It removed `integrations/legacy.py`
 and `application/legacy_queries.py`. The earlier removal of
-`application/legacy_sync.py` is now recorded as a parity gap rather than a valid
-dead-code deletion. Wikidata domain values, provider integration and application
+`application/legacy_sync.py` is replaced by the public-contract-only
+`application/osm_sync.py`. Wikidata domain values, provider integration and application
 workflow live in `domain/wikidata.py`, `integrations/wikidata.py` and
 `application/wikidata.py`. The router is created at registration time with
 explicit public ports.
@@ -65,10 +65,10 @@ copied or renamed as Analysis Areas code.
 - `/vergleich` and comparison stores/components;
 - polygon UI/models, notification UI, OSM viewport store and statistics storage;
 - Statistics migration `20260816_0016` and all unrelated Host-chain migrations;
-- generic Host module-job/maintenance CLI integration (not present in SDK 1.9);
-- OSM postprocessing producer and other-domain consumers, pending the contracts
-  in `sync-wikidata-parity.md`.
+- generic argument-bearing module-operation CLI convenience;
+- Polygon UUID-to-internal-scope resolution, documented in
+  `sync-wikidata-parity.md`.
 
 These are consumers, platform primitives, or other domain owners. Wikidata
-behavior is now module-owned; the remaining unported behavior is explicitly
-blocked and no private implementation was copied or relabeled.
+behavior and OSM area synchronization are now module-owned; the remaining polygon
+relation blocker is explicit and no private implementation was copied or relabeled.
