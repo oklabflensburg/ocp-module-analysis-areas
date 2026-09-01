@@ -1,4 +1,4 @@
-"""Real PostGIS proof for the external module's SDK 1.12 OSM sync path."""
+"""Real PostGIS proof for the external module's SDK 1.13 reconcile path."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -10,8 +10,13 @@ from app.core.config import get_settings
 from app.integrations.module_host_ports import (
     HostCacheGenerations,
     HostOsmSnapshotQueries,
+    HostPolygonIdentities,
+    HostPolygonSpatialMatches,
 )
-from ocp_module_analysis_areas.application.osm_sync import OsmAnalysisAreaSync
+from ocp_module_analysis_areas.application import (
+    OsmAnalysisAreaSync,
+    PolygonAnalysisAreaReconciler,
+)
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -20,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 @pytest_asyncio.fixture
 async def sync_sessions() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     url = get_settings().database_url
-    schema = "test_analysis_areas_sdk_112"
+    schema = "test_analysis_areas_sdk_113"
     admin = create_async_engine(url)
     try:
         async with admin.begin() as connection:
@@ -62,6 +67,21 @@ CREATE TABLE analysis_areas (
   UNIQUE (source,source_osm_type,source_osm_id)
 )
 """))
+            await connection.execute(text("""
+CREATE TABLE user_polygons (
+  id serial PRIMARY KEY, uuid uuid NOT NULL UNIQUE,
+  geometry geometry(Geometry,4326) NOT NULL
+)
+"""))
+            await connection.execute(text("""
+CREATE TABLE polygon_analysis_areas (
+  id serial PRIMARY KEY, polygon_id integer NOT NULL REFERENCES user_polygons(id),
+  analysis_area_id integer NOT NULL REFERENCES analysis_areas(id),
+  assignment_type text NOT NULL, overlap_ratio double precision,
+  created_at timestamptz NOT NULL,
+  UNIQUE (polygon_id,analysis_area_id)
+)
+"""))
         yield async_sessionmaker(engine, expire_on_commit=False)
     finally:
         await engine.dispose()
@@ -84,6 +104,9 @@ class Logger:
     def info(self, *_args, **_kwargs) -> None:
         pass
 
+    def warning(self, *_args, **_kwargs) -> None:
+        pass
+
 
 @pytest.mark.asyncio
 async def test_real_host_snapshot_and_generation_ports_sync_existing_identity(
@@ -100,12 +123,20 @@ INSERT INTO osm_features VALUES
  ('relation',3,ST_GeomFromText('POLYGON((9.2 54.2,9.5 54.2,9.5 54.5,9.2 54.5,9.2 54.2))',4326),
   '{"boundary":"administrative","name":"Hafen","admin_level":"10"}',:at)
 """), {"at": imported_at})
+        await session.execute(text("""
+INSERT INTO user_polygons (uuid,geometry) VALUES
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  ST_GeomFromText('POLYGON((8.6 53.6,10.1 53.6,10.1 55.1,8.6 55.1,8.6 53.6))',4326))
+"""))
         await session.commit()
 
     service = OsmAnalysisAreaSync(
         Database(sync_sessions),
         HostOsmSnapshotQueries(),
         HostCacheGenerations(),
+        PolygonAnalysisAreaReconciler(
+            HostPolygonSpatialMatches(), HostPolygonIdentities()
+        ),
         municipality_name="Flensburg",
         logger=Logger(),
     )
@@ -119,6 +150,12 @@ INSERT INTO osm_features VALUES
         generations = dict((await session.execute(
             text("SELECT namespace,version FROM cache_versions ORDER BY namespace")
         )).all())
+        relations = (
+            await session.execute(text("""
+SELECT polygon_id, analysis_area_id, assignment_type, overlap_ratio
+FROM polygon_analysis_areas ORDER BY analysis_area_id
+"""))
+        ).all()
     second = await service.sync()
     async with sync_sessions() as session:
         after = (
@@ -135,6 +172,13 @@ INSERT INTO osm_features VALUES
     assert second.unchanged == 3
     assert before == after
     assert generations == generations_after == {"analysis-areas": 2, "analytics": 2}
+    assert len(relations) == 3
+    assert all(row.assignment_type == "POINT_ON_SURFACE" for row in relations)
+    assert first.polygon_relations is not None
+    assert first.polygon_relations.created == 3
+    assert second.polygon_relations is not None
+    assert second.polygon_relations.unchanged == 3
+    assert not second.polygon_relations.changed
 
 
 @pytest.mark.asyncio
@@ -167,6 +211,9 @@ INSERT INTO osm_features VALUES
         Database(sync_sessions),
         HostOsmSnapshotQueries(),
         HostCacheGenerations(),
+        PolygonAnalysisAreaReconciler(
+            HostPolygonSpatialMatches(), HostPolygonIdentities()
+        ),
         municipality_name="Flensburg",
         logger=Logger(),
     )
