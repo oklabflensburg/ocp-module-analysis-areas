@@ -5,8 +5,8 @@ Standalone full-stack OCP module extracted from the built-in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
 Version `1.4.0` is validated against host commit
-`e789cf42522d5ef9b1b088df23063074da2e9b4c` on
-`feat/196-statistics-boundary`. This repository is the future source of truth;
+`410e9ba5dff2e3ed702d1a4ced95a5e5524cb52e` on
+`staging/epic-91-modular-host`. This repository is the future source of truth;
 the built-in remains in the host checkout and is excluded at composition time.
 
 ## Contents
