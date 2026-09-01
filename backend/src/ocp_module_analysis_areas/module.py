@@ -5,6 +5,8 @@ from app.platform.modules.sdk import (
     OSM_POSTPROCESSING_COMPLETED_EVENT_VERSION,
     OSM_SNAPSHOT_QUERY_SERVICE_ID,
     OSM_SNAPSHOT_QUERY_SERVICE_VERSION,
+    POLYGON_IDENTITY_SERVICE_ID,
+    POLYGON_IDENTITY_SERVICE_VERSION,
     POLYGON_SPATIAL_MATCH_SERVICE_ID,
     POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
     JobDefinition,
@@ -15,6 +17,7 @@ from app.platform.modules.sdk import (
     ModulePersistenceContribution,
     ModuleSettingsContribution,
     OsmSnapshotQueryPort,
+    PolygonIdentityPort,
     PolygonSpatialMatchPort,
     parse_manifest,
 )
@@ -22,6 +25,7 @@ from app.platform.modules.sdk import (
 from .api.router import create_router
 from .application import (
     OsmAnalysisAreaSync,
+    PolygonAnalysisAreaReconciler,
     SqlAnalysisAreaQueryService,
     WikidataEnrichmentService,
 )
@@ -43,7 +47,7 @@ MANIFEST = parse_manifest(
         "id": "analysis-areas",
         "name": "Analysis Areas",
         "version": "1.2.0",
-        "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.12.0,<2.0.0"},
+        "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.13.0,<2.0.0"},
         "backend": {"package": "ocp-module-analysis-areas"},
         "frontend": {"package": "@open-city-planner/analysis-areas"},
         "capabilities": [
@@ -102,12 +106,15 @@ class AnalysisAreasModule:
             service_id=OSM_SNAPSHOT_QUERY_SERVICE_ID,
             version=OSM_SNAPSHOT_QUERY_SERVICE_VERSION,
         )
-        # Resolution is intentionally verified here, while persistence of the returned
-        # UUIDs remains blocked until a public UUID -> PolygonScope-ID lookup exists.
-        context.services.require(
+        polygon_spatial_matches = context.services.require(
             PolygonSpatialMatchPort,
             service_id=POLYGON_SPATIAL_MATCH_SERVICE_ID,
             version=POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
+        )
+        polygon_identities = context.services.require(
+            PolygonIdentityPort,
+            service_id=POLYGON_IDENTITY_SERVICE_ID,
+            version=POLYGON_IDENTITY_SERVICE_VERSION,
         )
         router = create_router(
             context.database,
@@ -164,6 +171,10 @@ class AnalysisAreasModule:
             context.database,
             osm_snapshots,
             context.cache_generations,
+            PolygonAnalysisAreaReconciler(
+                polygon_spatial_matches,
+                polygon_identities,
+            ),
             municipality_name=settings.municipality_name,
             logger=context.logger,
         )
@@ -204,7 +215,7 @@ DEFINITION = ModuleDefinition(
                 }
             ),
         ),
-        adopted_tables=frozenset({"analysis_areas"}),
+        adopted_tables=frozenset({"analysis_areas", "polygon_analysis_areas"}),
     ),
     settings=ModuleSettingsContribution(
         module_id=MANIFEST.id,
