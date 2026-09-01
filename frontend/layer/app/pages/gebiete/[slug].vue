@@ -141,12 +141,12 @@
 <script setup lang="ts">
 import AnalysisAreaDetailMap from '../../components/analysis/AnalysisAreaDetailMap.vue'
 import {
-  areaPoiMapLink,
   getIndustryColor,
   getIndustryLabel,
   getPoiCategoryLabel,
   useModuleSession
 } from '#frontend-module-sdk'
+import { areaPoiMapLink } from '../../utils/areaPoiMapLink'
 
 const route = useRoute()
 const session = useModuleSession()

@@ -70,7 +70,7 @@ jobs:
         working-directory: .host-contract/frontend
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" SOURCE_COMMIT="$SOURCE_COMMIT" scripts/build-bundle
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/host-contract-test
-      - run: sha256sum -c dist/analysis-areas-1.3.0.ocp.sha256
+      - run: sha256sum -c dist/analysis-areas-1.4.0.ocp.sha256
       - name: Publish immutable release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,8 +80,8 @@ jobs:
             exit 1
           fi
           gh release create "$RELEASE_TAG" \
-            dist/analysis-areas-1.3.0.ocp \
-            dist/analysis-areas-1.3.0.ocp.sha256 \
+            dist/analysis-areas-1.4.0.ocp \
+            dist/analysis-areas-1.4.0.ocp.sha256 \
             --verify-tag \
             --title "$RELEASE_TAG" \
             --notes "First standalone release extracted from Open City Planner built-in module"

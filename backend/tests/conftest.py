@@ -103,6 +103,20 @@ except ModuleNotFoundError:
         resolved: tuple[PolygonIdentity, ...]
         missing: tuple[UUID, ...]
 
+    @dataclass(frozen=True, slots=True)
+    class StatisticsArea:
+        id: UUID
+        slug: str
+        name: str
+        area_type: str
+
+    @dataclass(frozen=True, slots=True)
+    class StatisticsSelection:
+        requested: StatisticsArea
+        target: StatisticsArea
+        municipality: StatisticsArea
+        inherited: bool = False
+
     for name in (
         "CachePort",
         "CacheGenerationPort",
@@ -129,6 +143,8 @@ except ModuleNotFoundError:
     sdk_module.PolygonSpatialMatch = PolygonSpatialMatch
     sdk_module.PolygonSpatialMatchRequest = PolygonSpatialMatchRequest
     sdk_module.PolygonSpatialMatchResult = PolygonSpatialMatchResult
+    sdk_module.StatisticsArea = StatisticsArea
+    sdk_module.StatisticsSelection = StatisticsSelection
     sys.modules.update(
         {
             "app": app_module,

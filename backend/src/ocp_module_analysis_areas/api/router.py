@@ -46,6 +46,7 @@ from .schemas import (
     AreaStatisticSeriesRead,
     AreaStatisticsRead,
 )
+from .statistics import statistics_selection
 
 ANALYTICS_TIMEOUT_DETAIL = {
     "error": {
@@ -218,7 +219,10 @@ def create_router(
         slug: str, session: SessionDep, request: Request
     ) -> AreaStatisticsRead:
         await public_queries.guard(request, session, "area-statistics")
-        result = await statistics.for_area(session, slug)
+        area = await detail_by_slug(session, slug)
+        if area is None:
+            raise HTTPException(404, "Das Gebiet wurde nicht gefunden.")
+        result = await statistics.for_selection(session, statistics_selection(area))
         if result is None:
             raise HTTPException(404, "Das Gebiet wurde nicht gefunden.")
         return AreaStatisticsRead.model_validate(asdict(result))
@@ -233,7 +237,12 @@ def create_router(
         slug: str, metric_key: str, session: SessionDep, request: Request
     ) -> AreaStatisticSeriesRead:
         await public_queries.guard(request, session, "area-statistic-series")
-        result = await statistics.series_for_area(session, slug, metric_key)
+        area = await detail_by_slug(session, slug)
+        if area is None:
+            raise HTTPException(404, "Das Gebiet wurde nicht gefunden.")
+        result = await statistics.series_for_selection(
+            session, statistics_selection(area), metric_key
+        )
         if result is None:
             raise HTTPException(404, "Die Gebietsstatistik wurde nicht gefunden.")
         return AreaStatisticSeriesRead.model_validate(asdict(result))
