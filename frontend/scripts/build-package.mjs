@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const output = path.join(root, 'dist', 'analysis-areas-1.1.0.tgz')
+const output = path.join(root, 'dist', 'analysis-areas-1.2.0.tgz')
 await rm(path.join(root, 'dist'), { recursive: true, force: true })
 await mkdir(path.dirname(output), { recursive: true })
 const staging = await mkdtemp(path.join(os.tmpdir(), 'analysis-areas-frontend-'))
@@ -17,7 +17,7 @@ try {
   ], { cwd: root, stdio: 'inherit' })
   if (deploy.status !== 0) process.exit(deploy.status ?? 1)
 
-  // The Host SDK 1.9 installer extracts frontend archives but deliberately does
+  // The Host module installer extracts frontend archives but deliberately does
   // not run a package manager. Flatten pnpm's lockfile-resolved production graph
   // into regular files so an installed layer outside the Host tree resolves its
   // declared runtime dependency without private Host node_modules fallbacks.

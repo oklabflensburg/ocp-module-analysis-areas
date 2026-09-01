@@ -1,10 +1,10 @@
 manifest_version: 1
 id: analysis-areas
 name: Analysis Areas
-version: 1.1.0
+version: 1.2.0
 requires:
   host: ">=0.2.0,<1.0.0"
-  sdk: ">=1.9.0,<2.0.0"
+  sdk: ">=1.12.0,<2.0.0"
   modules: {}
 optional:
   modules: {}
@@ -16,6 +16,7 @@ capabilities:
   - analysis-areas.public-api
   - analysis-areas.lookup
   - analysis-areas.geojson
+  - analysis-areas.wikidata-maintenance
 permissions: []
 config:
   namespace: analysis-areas

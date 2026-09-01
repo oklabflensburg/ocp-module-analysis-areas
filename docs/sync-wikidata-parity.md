@@ -1,86 +1,85 @@
-# OSM/Wikidata parity inventory
+# OSM/Wikidata parity matrix
 
-Historical reference: `open-city-planner@81844b666aca8356f9c5cb9a86f00cf15b784f79`
-(the pinned SDK 1.9.0 host contract). The inventory also follows each file back
-through Git, in particular `4468b0414cff4370b96023eb2ff578b2f07f71fd`, which
-moved the built-in into the module-shaped Host directory without changing these
-workflows.
+Historical implementation reference: `open-city-planner@4468b0414cff4370b96023eb2ff578b2f07f71fd^`.
+Current production contract: `open-city-planner@e1d7921698bb030f9e01de9ad16a9d85cb334b26`,
+Backend Module SDK `1.12.0`.
 
-Classification: **A** is Analysis-Areas-owned, **B** is a generic Host
-capability, **C** is another domain reached through a contract/event, and **D**
-is proven obsolete. Nothing in this inventory is classified D.
+| Historical function | New owner / implementation | Public Host dependency | Tests | Status |
+| --- | --- | --- | --- | --- |
+| Municipality lookup, administrative-level inference and polygonal-place selection | module `application/osm_sync.py` | `platform.osm-snapshot-query@1` | `test_osm_sync.py` pagination/filter characterization | complete |
+| Geometry repair, multipolygon normalization, centroid and EPSG:25832 area | module SQL over immutable snapshot EWKB | module DB session; no Host table | SQL/import tests plus Host lifecycle | complete |
+| Upsert by `(source, source_osm_type, source_osm_id)` | module `UPSERT_SQL` | none | existing UUID/slug reuse and duplicate-delivery test | complete |
+| Preserve manual Wikidata decisions and mark conflicting OSM QIDs | module `UPSERT_SQL` | none | SQL characterization | complete |
+| Removed OSM candidates | module retains historical no-delete behavior | none | SQL/no-delete characterization | complete |
+| Parent reconciliation | module `PARENT_SQL` over `analysis_areas` | none | idempotent sync test | complete |
+| OSM completion trigger | namespaced module subscriber | `osm.postprocessing-completed@1` | real Host event-bus dispatch plus registration check | complete |
+| OSM cache invalidation | module sync transaction | `CacheGenerationPort.bump` | one bump for first sync, none for unchanged duplicate | complete; bumps historical `analysis-areas` and `analytics` resources |
+| OSM pagination | module cursor loop, 500-item pages | `OsmSnapshotQueryPort` | advancing-cursor and page assertions | complete |
+| Wikidata OSM-ID, Wikipedia and contextual search matching | module domain/application/provider | `ModuleContext.http`, module cache | provider and matching characterization | complete |
+| Wikidata retry, provider error isolation and positive/negative caching | module provider policy | `HttpClientFactoryPort` | timeout/retry/error/cache tests | complete; no direct `httpx` fallback |
+| Wikidata bulk persistence | module short write phase | DB plus `CacheGenerationPort.bump` | one bump for 1+ writes, none for zero writes | complete |
+| Manual Wikidata assignment | `analysis-areas.wikidata-maintenance@1` | HTTP, DB and generation port | validation and rollback tests | complete; row and generation roll back together |
+| Scheduled Wikidata refresh | `analysis-areas.wikidata-refresh` | normal scheduler context | Host registration/lifecycle test | complete |
+| Polygon spatial selection | Host read-only matcher resolved by module | `platform.polygon-spatial-match@1` | Host service-resolution check | contract available |
+| `polygon_analysis_areas` reconcile | remains module-owned | missing public UUID-to-internal-ID lookup | architecture/import guards | **blocked** |
+| Optional social-change publication | foreign social domain | no public publication event contract | historical audit | not restored; normal OSM postprocess historically passed `publish_relevant_updates=False` |
 
-| Historical function | Old path | Trigger | Tables | Provider | Cache effect | Historical tests | Class / new owner | External-module target / status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Discover municipality and infer district/quarter levels | `application/legacy_sync.py` | `sync_analysis_areas` CLI and OSM postprocess | read `osm_features` | OSM snapshot | none | `test_osm_sync.py`, SQL characterization in `test_analysis_areas.py` | A algorithm, C OSM snapshot | `application/sync.py`; **blocked** pending an OSM snapshot contract |
-| Select administrative and polygonal-place candidates, repair/multipolygon geometry, calculate centroid/area | same | same | read `osm_features` | OSM snapshot | none | `test_osm_sync.py`, `test_analysis_areas_characterization.py` | A algorithm, C OSM snapshot | same blocker; direct foreign-table SQL is forbidden |
-| Upsert by `(source, source_osm_type, source_osm_id)` while preserving UUID/slug and manual Wikidata decisions | same | same | write `analysis_areas` | none | later invalidation | SQL characterization in `test_analysis_areas.py` | A | port after the immutable OSM snapshot exists |
-| Reconcile removed upstream areas | no deletion existed in `legacy_sync.py` | same | `analysis_areas` | OSM snapshot | none | no deletion test existed | A | historical behavior is retain-not-delete; must remain explicit in the port |
-| Rebuild polygon-to-area assignment | same | same | `polygon_analysis_areas`, read `user_polygons` | Polygon domain | analytics invalidation | characterization coverage | A relation, C polygon geometry | blocked pending a polygon-assignment command contract; foreign ORM/table access is forbidden |
-| Publish relevant area changes | same via `enqueue_area_publication` | optional CLI flag; disabled in OSM postprocess | social outbox plus area read | social publishing | none | social publishing tests | C | use a versioned domain event after commit; exact event consumer contract is missing |
-| Invalidate `analysis-areas` and `analytics` generations | same | end of sync | `cache_versions` | cache platform | generation bump | cache/API tests | B | SDK 1.9 exposes only `current`; mutating invalidation contract is missing |
-| Resolve OSM Wikidata, OSM Wikipedia, then contextual search | `services/wikidata_enrichment.py` | sync CLI, sync-with-enrichment CLI, OSM postprocess | read/write `analysis_areas` | Wikidata API | provider cache and analysis-area invalidation | `test_wikidata_enrichment.py` | A using B HTTP/cache/DB | `integrations/wikidata.py`, `application/wikidata.py` |
-| Validate candidates by name, geographic distance, parent and description | same | same | area snapshot | Wikidata API | provider cache | same | A | same; network phase uses immutable snapshots and no checked-out DB session |
-| Persist status/confidence and preserve `MANUAL` rows | same | same | `analysis_areas` | none | module cache clear; shared generation bump unavailable | historical SQL behavior plus ported tests | A using B cache invalidation | implementation ready internally; automatic and public service execution blocked |
-| Manual assignment by slug or unique case-insensitive name, QID/entity/name validation | `cli/set_area_wikidata.py` | operator CLI | `analysis_areas` | Wikidata API | module cache clear; shared generation bump unavailable | previously indirect | A | implementation ready internally; no public maintenance service, capability or generic argument-bearing module CLI |
-| Wikidata retries, timeout/provider error isolation and negative caching | `services/wikidata_enrichment.py` | every enrichment | none during HTTP | Wikidata API | positive/negative TTL | provider tests | A policy using B HTTP/cache | ported; public HTTP port preferred; temporary trusted-module `httpx` fallback has explicit timeout/User-Agent, bounded retry and cleanup tests because the pinned production context leaves `http` unwired |
-| Structured job logging/metrics/retry/non-concurrency | Host job registry | registered job | none | none | none | `test_module_jobs.py` | B | application implementation exists, but `analysis-areas.wikidata-refresh` is intentionally **not registered** until transactional shared-generation invalidation is public |
-| OSM postprocessing trigger | `cli/postprocess_osm.py` immediately after OSM reconciliation, inside its transaction for area sync and after commit for Wikidata | hourly OSM import | OSM, area, polygon, state tables | OSM/Wikidata | several generations | `test_osm_sync.py` | C event producer, A subscribers/jobs | **blocked**: the pinned Host emits no public postprocess event |
-| Operational CLIs | three files under `backend/app/cli/` | operator invocation | as above | OSM/Wikidata | as above | no direct CLI tests | A commands over B generic module operations | implementation exists internally; public service/job exposure and generic operation contracts are missing |
+## OSM semantics
 
-## Transaction and failure characterization
+The module requests bounded administrative-boundary and polygonal-place pages,
+then interprets the generic tags itself. It preserves the historical rules:
 
-- OSM postprocessing called area sync with `commit=False`, then refreshed OSM
-  polygon sources, bumped Host generations, updated replication state and made
-  one commit. Standalone sync defaulted to one commit of its own.
-- Removed OSM candidates were not deleted from `analysis_areas`; the only
-  deletion in the postprocessor reconciled `osm_features`.
-- Area identity was stable because the upsert conflict key was OSM identity and
-  updates did not overwrite `uuid` or `slug`.
-- Wikidata bulk enrichment caught failures per area, recorded only the exception
-  type, continued, then called `bump_cache_versions(session,
-  ("analysis-areas",))` exactly once after the loop and before the single
-  `session.commit()` (even when the selection was empty). Manual assignment
-  likewise updated the row, bumped exactly `analysis-areas`, and then committed.
-  Thus each data change and its generation update shared one transaction; no
-  `analytics` generation was bumped by either Wikidata path.
-- The external module's `CachePort.clear()` maps to the Host's module-prefixed
-  `delete_pattern` and therefore clears only `...:module:analysis-areas:*`. It
-  runs after a committed write (and only when bulk sync resolved rows), never as
-  a Host-wide Redis flush. This scoped clear does not replace the missing shared
-  generation bump.
-- The old implementation kept its ORM session checked out during every network
-  request. The external implementation intentionally improves this production
-  property: snapshot read, released session, HTTP resolution, short write.
-- Candidate-distance parity is semantic rather than byte-level: the old
-  `ST_DistanceSphere` and the released-session haversine calculation use the same
-  coordinates and thresholds; their Earth-radius difference is far below the
-  stored two-decimal confidence precision.
+- the municipality is the named administrative polygon with the smallest
+  numeric `admin_level`, breaking ties by largest area;
+- the next two contained administrative levels become district and quarter;
+- `borough` and `suburb` places become districts, while `quarter` and
+  `neighbourhood` become quarters unless the same OSM identity was already
+  selected administratively;
+- names prefer `name`, then `name:de`, then `OSM <id>`;
+- source OSM type/ID, admin level, place, Wikidata/Wikipedia tags, geometry and
+  import timestamp are persisted;
+- conflict-key updates never replace UUID or slug; stale candidates are retained,
+  matching the historical implementation;
+- unchanged repeated snapshots perform no row write and no generation bump.
 
-## Required Host follow-ups
+The event payload is used only as a trigger. The handler always reads the current
+committed snapshot through the public service. At-least-once delivery therefore
+converges on the same domain state.
 
-The smallest sufficient public additions are:
+## Transactions
 
-1. A versioned OSM snapshot/query service returning immutable area-candidate
-   DTOs plus an `osm.postprocessing-completed` event emitted after the OSM
-   transaction commits. The module subscribes and schedules its own sync; the
-   Host never names Analysis Areas.
-2. A cache-generation invalidation operation (`bump(session, resources)`) on the
-   existing generic port. It must participate in the caller transaction. Until
-   that contract exists, both the automatic Wikidata job and public mutating
-   maintenance service remain unregistered, and no maintenance capability is
-   announced, even though the implementation is retained internally.
-3. A polygon-domain command that atomically refreshes assignments for a supplied
-   module-owned area snapshot/scope, or a versioned event consumed by the polygon
-   owner. No `user_polygons` table/ORM type may cross the boundary.
-4. A generic operational CLI capable of listing/running registered jobs and, for
-   manual maintenance, invoking validated module command definitions with
-   arguments. The existing installer CLI does not expose `JobRunner`.
-5. Wire the existing `HttpClientFactoryPort` into the production `ModuleContext`
-   so Host-owned timeout, telemetry and egress policies replace the explicitly
-   documented module-owned fallback.
+OSM snapshot reads and module writes share a Host-managed session. Area and parent
+mutations are followed by one transactional generation bump and the caller-owned
+commit. OSM synchronization retains the historical `analysis-areas` and
+`analytics` generation effects.
 
-Until those contracts exist, implementing OSM sync or claiming postprocessing
-parity would require private table/implementation coupling and would violate
-Issue #5's acceptance boundary. These are blocking parity gaps, not obsolete
-functions.
+Wikidata uses three short phases: snapshot read and release, external HTTP without
+a DB session, then a new write session. Bulk sync performs zero bumps for zero
+writes and one bump for one or more writes. Manual assignment updates the row,
+bumps `analysis-areas`, and commits in that order. Module-cache clearing is an
+additional post-commit optimization, never a replacement for the shared bump.
+
+## Exact remaining blocker
+
+`platform.polygon-spatial-match@1` returns canonical Polygon UUID strings. The
+adopted `polygon_analysis_areas.polygon_id` foreign key and public `PolygonScope`
+use the Host's internal positive integer Polygon IDs. `PolygonQueryPort` only
+lists projections for an already-known integer scope; it has no UUID lookup.
+
+Consequently the module cannot persist desired matches without directly reading
+`user_polygons`, which is forbidden. It also cannot safely change the adopted
+relation to UUIDs because existing query and analytics ports require integer
+scopes. The smallest missing generic contract is a read-only stable Polygon UUID
+to internal `PolygonScope` ID resolver (or equivalent relation-safe token that
+the existing public query/analytics ports accept).
+
+No `user_polygons` ORM/SQL fallback is present. Until that generic contract is
+available, Polygon match resolution is verified at registration, but relation
+mutation is deliberately not executed or claimed.
+
+## Operator path
+
+Manual Wikidata assignment is production-reachable through the versioned
+maintenance service. The Host still has no generic argument-bearing module CLI,
+so a shell-friendly wrapper remains an operator-convenience gap rather than a
+blocker for scheduled/event-driven production functionality.

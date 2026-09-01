@@ -5,10 +5,8 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from contextlib import asynccontextmanager
 from typing import Any
 
-import httpx
 from app.platform.modules.sdk import CachePort, HttpClientFactoryPort
 
 from ..domain.wikidata import WikidataEntity
@@ -34,18 +32,13 @@ def wikipedia_title(value: str | None) -> str | None:
 class WikidataClient:
     def __init__(
         self,
-        http: HttpClientFactoryPort | None,
+        http: HttpClientFactoryPort,
         cache: CachePort,
         *,
         api_url: str,
         cache_ttl_seconds: int,
         negative_cache_ttl_seconds: int,
         search_limit: int,
-        timeout_seconds: float = 10.0,
-        user_agent: str = (
-            "Stadtplaner/1.0 "
-            "(https://stadtplaner.oklabflensburg.de; OK Lab Flensburg)"
-        ),
         sleep=asyncio.sleep,
     ) -> None:
         self._http = http
@@ -54,8 +47,6 @@ class WikidataClient:
         self._cache_ttl = cache_ttl_seconds
         self._negative_cache_ttl = negative_cache_ttl_seconds
         self._search_limit = search_limit
-        self._timeout_seconds = timeout_seconds
-        self._user_agent = user_agent
         self._sleep = sleep
 
     async def _request(self, params: Mapping[str, str]) -> dict[str, Any]:
@@ -71,16 +62,22 @@ class WikidataClient:
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                async with self._client() as client:
-                    response = await client.request(
-                        "GET",
-                        self._api_url,
-                        headers={
-                            "Accept": "application/json",
-                            "User-Agent": self._user_agent,
-                        },
-                        params={**params, "format": "json", "formatversion": "2"},
-                    )
+                async with self._http.create(
+                    service_name="wikidata", base_url=self._api_url
+                ) as client:
+                    try:
+                        response = await client.request(
+                            "GET",
+                            self._api_url,
+                            headers={"Accept": "application/json"},
+                            params={**params, "format": "json", "formatversion": "2"},
+                        )
+                    except Exception as exc:  # public HTTP port intentionally hides transport types
+                        last_error = exc
+                        if attempt < 2:
+                            await self._sleep(float(attempt + 1))
+                            continue
+                        raise
                 if response.status_code == 429 or response.status_code >= 500:
                     if attempt < 2:
                         retry_after = response.headers.get("Retry-After", str(attempt + 1))
@@ -109,12 +106,7 @@ class WikidataClient:
                     ttl_seconds=ttl,
                 )
                 return payload
-            except (
-                TimeoutError,
-                OSError,
-                httpx.TimeoutException,
-                httpx.NetworkError,
-            ) as exc:
+            except (TimeoutError, OSError) as exc:
                 last_error = exc
                 if attempt < 2:
                     await self._sleep(float(attempt + 1))
@@ -122,17 +114,6 @@ class WikidataClient:
         if last_error is not None:
             raise last_error
         raise WikidataProviderError("Wikidata request failed")
-
-    @asynccontextmanager
-    async def _client(self):
-        if self._http is not None:
-            async with self._http.create(
-                service_name="wikidata", base_url=self._api_url
-            ) as client:
-                yield client
-            return
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-            yield client
 
     async def entity(self, qid: str) -> WikidataEntity | None:
         if not QID_RE.fullmatch(qid):

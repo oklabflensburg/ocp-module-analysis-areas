@@ -8,6 +8,8 @@ from urllib.parse import quote
 from app.platform.modules.sdk import (
     CacheGenerationPort,
     CachePort,
+    OsmSnapshotQuery,
+    OsmSnapshotQueryPort,
     PolygonAnalyticsPort,
     PolygonFilterValues,
     PolygonQueryPort,
@@ -50,47 +52,72 @@ FROM analysis_areas area LEFT JOIN analysis_areas parent ON parent.id=area.paren
 """)
 
 
-POI_TAG_PREDICATE_SQL = """
-osm.tags ? 'shop'
-OR osm.tags ? 'amenity'
-OR osm.tags ? 'tourism'
-OR osm.tags ? 'leisure'
-"""
+AREA_SPATIAL_SNAPSHOT_SQL = text("""
+SELECT ST_AsEWKB(geometry), ST_XMin(ST_Box3D(geometry)),
+  ST_YMin(ST_Box3D(geometry)), ST_XMax(ST_Box3D(geometry)),
+  ST_YMax(ST_Box3D(geometry))
+FROM analysis_areas WHERE id=:id
+""")
 
-AREA_POI_CATEGORY_SQL = """
-coalesce(
-  tags->>'shop',
-  tags->>'amenity',
-  tags->>'tourism',
-  tags->>'leisure',
-  'other'
+AREA_COVERS_SNAPSHOT_SQL = text("""
+SELECT ST_Covers(
+  ST_GeomFromEWKB(:area_geometry),
+  ST_PointOnSurface(ST_GeomFromEWKB(:feature_geometry))
 )
-"""
-
-# ST_PointOnSurface(osm.geometry) ist kein Ausdruck des GiST-Indexes auf geometry.
-# Der Bounding-Box-Operator begrenzt deshalb zuerst indexierbar die Kandidatenmenge.
-AREA_POI_ANALYTICS_SQL = text(f"""
-WITH target AS (
-  SELECT geometry
-  FROM analysis_areas
-  WHERE id = :id
-)
-SELECT
-  {AREA_POI_CATEGORY_SQL} AS category,
-  count(*) AS count
-FROM osm_features osm
-CROSS JOIN target
-WHERE osm.geometry && target.geometry
-  AND ST_Covers(target.geometry, ST_PointOnSurface(osm.geometry))
-  AND ({POI_TAG_PREDICATE_SQL})
-GROUP BY 1
-ORDER BY count(*) DESC, 1
 """)
 
 
-async def _area_poi_categories(session: AsyncSession, area_db_id: int) -> list[IndustryCount]:
-    rows = (await session.execute(AREA_POI_ANALYTICS_SQL, {"id": area_db_id})).all()
-    return [IndustryCount(category=str(category), count=int(count)) for category, count in rows]
+async def _area_poi_categories(
+    session: AsyncSession,
+    osm_snapshots: OsmSnapshotQueryPort,
+    area_db_id: int,
+) -> list[IndustryCount]:
+    spatial = (await session.execute(AREA_SPATIAL_SNAPSHOT_SQL, {"id": area_db_id})).first()
+    if spatial is None:
+        return []
+    area_geometry = bytes(spatial[0])
+    bbox = tuple(float(value) for value in spatial[1:5])
+    counts: dict[str, int] = {}
+    cursor = None
+    while True:
+        page = await osm_snapshots.list_features(
+            session,
+            OsmSnapshotQuery(
+                geometry_kinds=("point", "area"),
+                bbox=bbox,
+                cursor=cursor,
+                limit=500,
+            ),
+        )
+        for feature in page.items:
+            category = next(
+                (
+                    feature.tags[key]
+                    for key in ("shop", "amenity", "tourism", "leisure")
+                    if feature.tags.get(key)
+                ),
+                None,
+            )
+            if category is None:
+                continue
+            covered = await session.scalar(
+                AREA_COVERS_SNAPSHOT_SQL,
+                {
+                    "area_geometry": area_geometry,
+                    "feature_geometry": feature.geometry_wkb,
+                },
+            )
+            if covered:
+                counts[category] = counts.get(category, 0) + 1
+        if page.next_cursor is None:
+            break
+        if page.next_cursor == cursor:
+            raise RuntimeError("OSM POI pagination returned a non-advancing cursor")
+        cursor = page.next_cursor
+    return [
+        IndustryCount(category=category, count=count)
+        for category, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
 
 
 def _external_links(values: dict) -> AnalysisAreaExternalLinks:
@@ -246,6 +273,7 @@ async def _area_row(session: AsyncSession, area_id: uuid.UUID) -> tuple[Analysis
 async def _area_analytics_uncached(
     session: AsyncSession,
     polygon_analytics: PolygonAnalyticsPort,
+    osm_snapshots: OsmSnapshotQueryPort,
     area_id: uuid.UUID,
     **kwargs,
 ) -> AnalysisAreaAnalytics | None:
@@ -262,7 +290,7 @@ async def _area_analytics_uncached(
     ]
     poi_categories: list[IndustryCount] = []
     if not kwargs["sources"] or "OSM" in kwargs["sources"]:
-        poi_categories = await _area_poi_categories(session, area.id)
+        poi_categories = await _area_poi_categories(session, osm_snapshots, area.id)
     density = metrics.total_area_m2 / (area.area_m2 / 1_000_000) if metrics.total_area_m2 is not None and area.area_m2 else None
     return AnalysisAreaAnalytics(area=detail, metrics=metrics, industry_distribution=distribution,
                                  poi_count=sum(item.count for item in poi_categories), poi_categories=poi_categories,
@@ -442,6 +470,7 @@ async def area_analytics(
     generations: CacheGenerationPort,
     settings: AnalysisAreasSettings,
     polygon_analytics: PolygonAnalyticsPort,
+    osm_snapshots: OsmSnapshotQueryPort,
     area_id: uuid.UUID,
     **kwargs,
 ) -> AnalysisAreaAnalytics | None:
@@ -451,7 +480,9 @@ async def area_analytics(
     )
 
     async def compute() -> dict | None:
-        result = await _area_analytics_uncached(session, polygon_analytics, area_id, **kwargs)
+        result = await _area_analytics_uncached(
+            session, polygon_analytics, osm_snapshots, area_id, **kwargs
+        )
         return result.model_dump(mode="json") if result else None
 
     data = await get_or_compute(

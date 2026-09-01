@@ -15,17 +15,19 @@
 - [x] Existing table names/data adoption and historical revisions retained.
 - [x] Wikidata lookup, matching, refresh and manual-assignment implementation is
   retained internally as module-owned domain, provider and application code.
-- [ ] Automatic execution and public mutating maintenance exposure are
-  intentionally disabled: the module registers neither
-  `analysis-areas.wikidata-refresh` nor
-  `analysis-areas.wikidata-maintenance` and announces no maintenance capability
-  until a public transactional `CacheGenerationPort.bump(session, resources)`
-  can preserve the historical `analysis-areas` generation contract.
+- [x] `analysis-areas.wikidata-refresh` and
+  `analysis-areas.wikidata-maintenance@1` are registered. Wikidata mutations and
+  the `analysis-areas` generation bump share one transaction.
 - [x] Wikidata network calls run without a checked-out DB session and provider
   failures remain isolated per area.
-- [ ] OSM area sync, polygon assignment refresh, social-change publication and
-  the OSM postprocessing trigger require the public contracts documented in
-  `sync-wikidata-parity.md`; complete functional parity is not yet claimed.
+- [x] OSM area sync is module-owned, paginated and triggered by
+  `osm.postprocessing-completed@1`; duplicate delivery is idempotent.
+- [ ] Polygon assignment persistence remains blocked because the spatial-match
+  result exposes stable Polygon UUIDs while the adopted relation and public
+  `PolygonScope` require internal integer IDs. No public UUID lookup exists.
+- [ ] Optional historical social-change publication is not restored; the normal
+  OSM postprocess path historically disabled it, so production synchronization is
+  unaffected.
 - [x] Built-in host code, migrations and tests were not deleted.
 - [x] Public service ports replace the legacy adapter; the installable backend is
   strict public-SDK-only module code.
@@ -37,6 +39,7 @@
 - [x] Missing cutover configuration fails fast for duplicate backend and frontend
   module IDs; duplicate Host/module migration revisions also fail fast.
 
-Host Issue #192 and module Issue #4 are technically fulfilled. PR #2 remains
-open for final review; the hidden Host `AnalysisAreaDetailMap` auto-import
-dependency is removed.
+The only required Issue #5 blocker identified by this implementation is the
+Polygon UUID-to-internal-ID mapping contract described above. A generic manual
+operator CLI remains a convenience gap; manual mutation is safely available
+through the versioned maintenance service.

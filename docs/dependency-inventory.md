@@ -13,10 +13,10 @@ physische Tabelle `analysis_areas`.
 | Gebietsidentität, UUID, Slug, Name, Typ und Hierarchie | gehört zu `analysis-areas` | Domain-/API-Verträge und Query-Service des Moduls |
 | `analysis_areas`-Tabelle, PostGIS-Geometrie, Zentroid und OSM-Provenienz | gehört zu `analysis-areas` | unveränderte Tabelle, module-owned SQLAlchemy-Metadaten |
 | Gebietsliste, Detail, Lookup, GeoJSON und Sitemap-Metadaten | gehört zu `analysis-areas` | Application/Persistence/API des Moduls |
-| OSM-Gebietssynchronisierung | Host CLI und OSM-Postprocessing | blockiert auf öffentliche OSM-/Event-/Cache-/Polygon-Contracts; siehe `sync-wikidata-parity.md` |
+| OSM-Gebietssynchronisierung | Analysis-Areas module | paginierter Snapshot-Port plus Postprocessing-Event; Polygonrelation separat blockiert, siehe `sync-wikidata-parity.md` |
 | `area_statistics` und Statistikschemas | `analysis-areas` konsumiert fremden Vertrag | öffentlicher Statistics-Port; API-Schemas bleiben module-owned |
 | Polygonliste und `polygon_analysis_areas`-Zuordnung | geteilte Verantwortung | Relation/Scope module-owned, Polygonprojektion über öffentlichen Port |
-| Analytics/Comparison und POI-Aggregationen | geteilte Verantwortung | Polygonaggregate über Port; räumliche POI-Query module-owned |
+| Analytics/Comparison und POI-Aggregationen | geteilte Verantwortung | Polygonaggregate über Port; POI-Snapshots über öffentlichen OSM-Port, räumliche Interpretation module-owned |
 | Map Preview, ETag und Bild-Cache | Host-/Plattform-Primitive | öffentlicher Preview-Port; HTTP-Parität module-owned |
 | Public Query Guard, DB-Timeout-Erkennung und Response-Limits | Host-/Plattform-Primitive | Host-Adapter; keine Sicherheitslogik im Fachmodul dupliziert |
 | Redis-Verbindung und globale Cache-Versionen | Host-/Plattform-Primitive | öffentliche Cache-/Generation-Ports; Keys und TTL-Policy module-owned |

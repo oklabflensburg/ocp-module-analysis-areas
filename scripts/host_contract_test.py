@@ -144,16 +144,37 @@ def backend_runtime_check(
     python: Path, backend: Path, environment: Mapping[str, str]
 ) -> None:
     probe = """
+import asyncio
+from datetime import UTC, datetime
 from app.core.config import get_settings
-from app.main import app, module_runtime
+from app.main import app, event_bus, module_runtime
 from app.platform.modules import EntryPointModuleDiscovery, FirstPartyModuleDiscovery
 from app.platform.modules.runtime import resolve_module_definitions
+from app.platform.modules.sdk import (
+    OSM_POSTPROCESSING_COMPLETED_EVENT,
+    OSM_SNAPSHOT_QUERY_SERVICE_ID,
+    OSM_SNAPSHOT_QUERY_SERVICE_VERSION,
+    POLYGON_SPATIAL_MATCH_SERVICE_ID,
+    POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
+    OsmSnapshotQueryPort,
+    OsmPostprocessingCompleted,
+    PolygonSpatialMatchPort,
+    event_envelope,
+)
 from ocp_module_analysis_areas.contracts import (
     SERVICE_ID,
     SERVICE_VERSION,
+    WIKIDATA_MAINTENANCE_SERVICE_ID,
+    WIKIDATA_MAINTENANCE_SERVICE_VERSION,
     AnalysisAreaQueryService,
     WikidataMaintenanceService,
 )
+from ocp_module_analysis_areas.application.osm_sync import OsmAnalysisAreaSync
+
+osm_event_calls = []
+async def contract_osm_sync(self):
+    osm_event_calls.append(self)
+OsmAnalysisAreaSync.sync = contract_osm_sync
 
 settings = get_settings()
 definitions = resolve_module_definitions(
@@ -164,7 +185,7 @@ definitions = resolve_module_definitions(
 analysis = [item for item in definitions if item[1].id == "analysis-areas"]
 assert len(analysis) == 1
 assert analysis[0][0].origin.startswith("entry-point:analysis-areas=")
-assert "analysis-areas.wikidata-maintenance" not in analysis[0][1].capabilities
+assert "analysis-areas.wikidata-maintenance" in analysis[0][1].capabilities
 assert not any(
     item.declared_id == "analysis-areas"
     for item in FirstPartyModuleDiscovery().discover_available()
@@ -178,7 +199,7 @@ for expected in (
 ):
     assert expected in paths, expected
 assert module_runtime.job_registry is not None
-assert "analysis-areas.wikidata-refresh" not in {
+assert "analysis-areas.wikidata-refresh" in {
     item.job_id for item in module_runtime.job_registry.jobs
 }
 services = module_runtime.registry.get("analysis-areas").context.services
@@ -188,9 +209,31 @@ assert services.optional(
 ) is not None
 assert services.optional(
     WikidataMaintenanceService,
-    service_id="analysis-areas.wikidata-maintenance",
-    version=1,
-) is None
+    service_id=WIKIDATA_MAINTENANCE_SERVICE_ID,
+    version=WIKIDATA_MAINTENANCE_SERVICE_VERSION,
+) is not None
+assert services.require(
+    OsmSnapshotQueryPort,
+    service_id=OSM_SNAPSHOT_QUERY_SERVICE_ID,
+    version=OSM_SNAPSHOT_QUERY_SERVICE_VERSION,
+) is not None
+assert services.require(
+    PolygonSpatialMatchPort,
+    service_id=POLYGON_SPATIAL_MATCH_SERVICE_ID,
+    version=POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
+) is not None
+subscription = event_bus.subscription("analysis-areas.sync-after-osm-postprocessing")
+assert subscription is not None
+assert subscription.event_name == OSM_POSTPROCESSING_COMPLETED_EVENT
+assert subscription.versions == frozenset({1})
+asyncio.run(event_bus.dispatch(event_envelope(OsmPostprocessingCompleted(
+    sequence=123,
+    osm_timestamp=datetime(2026, 9, 1, tzinfo=UTC),
+    inserted=1,
+    updated=2,
+    deleted=3,
+))))
+assert len(osm_event_calls) == 1
 """
     run((str(python), "-c", probe), cwd=backend, environment=environment)
 
@@ -428,7 +471,7 @@ def main() -> None:
         enabled = {**base_environment, **enabled_environment}
 
         backend_runtime_check(bundle_python, cutover_backend, enabled)
-        run(
+        sync_contract = run(
             (
                 str(bundle_python),
                 "-m",
@@ -437,11 +480,18 @@ def main() -> None:
                     repository
                     / "tests/host-baseline/backend/tests/test_analysis_areas_characterization.py"
                 ),
+                str(
+                    repository
+                    / "tests/host-baseline/backend/tests/test_sync_sdk_112_contract.py"
+                ),
                 "-q",
             ),
             cwd=cutover_backend,
             environment=enabled,
         )
+        # Two characterization tests and two real PostGIS sync tests must run.
+        assert "skipped" not in sync_contract.stdout, sync_contract.stdout
+        assert "4 passed" in sync_contract.stdout, sync_contract.stdout
         frontend_output = frontend_check(cutover_frontend, enabled)
         assert "analysis-areas" in frontend_output
         assert (cutover_frontend / "frontend-modules/analysis-areas/module.json").is_file()
@@ -531,7 +581,8 @@ def main() -> None:
             "host contract passed: normal verify/install disabled; passive migrations; "
             "installed-package import guard; "
             "exclusive ownership; duplicate fail-fast; normal CLI enable/disable/re-enable; "
-            "wikidata job/service/capability absent; "
+            "wikidata job/service/capability present; OSM/polygon services resolved; "
+            "OSM subscriber dispatched; real PostGIS snapshot/upsert/generation test; "
             "backend/API characterization and frontend route/map discovery; "
             "built-in-free detail-map ownership and social-preview ready wiring; "
             "modules:check; typecheck; build; "

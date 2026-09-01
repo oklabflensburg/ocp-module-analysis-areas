@@ -12,6 +12,7 @@ from app.platform.modules.sdk import (
     MapPreviewPort,
     MapPreviewRequest,
     MapPreviewUnavailableError,
+    OsmSnapshotQueryPort,
     PolygonAnalyticsPort,
     PolygonQueryPort,
     PublicQueryPort,
@@ -73,6 +74,7 @@ def create_router(
     map_previews: MapPreviewPort,
     polygons: PolygonQueryPort,
     polygon_analytics: PolygonAnalyticsPort,
+    osm_snapshots: OsmSnapshotQueryPort,
     statistics: StatisticsQueryPort,
     settings: AnalysisAreasSettings,
 ) -> APIRouter:
@@ -252,6 +254,7 @@ def create_router(
             cache_generations,
             settings,
             polygon_analytics,
+            osm_snapshots,
             area_id,
             **_filters(params),
         )

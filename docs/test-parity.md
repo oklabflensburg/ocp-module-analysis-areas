@@ -12,7 +12,7 @@ runner; standalone cases run directly in this repository.
 | `backend/tests/modules/analysis_areas/test_analysis_areas_module.py` | preserved snapshot; identity/persistence/import behavior also covered by standalone backend contracts and pinned-host verifier |
 | `test_analysis_areas_characterization.py`, `test_analysis_area_public_api.py` | preserved; route set characterized locally |
 | `test_analysis_areas.py`, `test_analysis_area_analytics_performance.py` | preserved; executed in full host/PostGIS environment |
-| `test_flensburg_statistics.py`, `test_osm_sync.py` | preserved as cross-domain compatibility tests; OSM porting remains blocked |
+| `test_flensburg_statistics.py`, `test_osm_sync.py` | preserved cross-domain compatibility plus standalone pagination/upsert/idempotency coverage |
 | `test_wikidata_enrichment.py` | matching, provider, cache, error, idempotency and released-session behavior ported to `backend/tests/test_wikidata.py` |
 | `analysis-areas-module.test.ts` | preserved; routes/navigation/map definitions covered locally and by host frontend preflight |
 | `analysis-area-overview*.test.ts`, `analysis-area-pages.test.ts`, `analysis-areas-ui.test.ts`, `area-poi-navigation.test.ts`, `area-statistics.test.ts` | preserved; core source/UI contracts covered locally; SSR cases remain host-run |

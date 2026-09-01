@@ -10,7 +10,7 @@ or backfill was rewritten.
 | `20260814_0014` | `20260814_0013` | Creates `analysis_areas` and `polygon_analysis_areas`; UUID and slug uniqueness; self-parent FK `SET NULL`; polygon/user and polygon/area FKs `CASCADE`; `MULTIPOLYGON(4326)` geometry, `POINT(4326)` centroid; type/source checks; OSM identity uniqueness; parent/type/GiST and association indexes. |
 | `20260817_0023` | `20260817_0022` | Adds OSM/Wikidata/Wikipedia provenance and match columns, three checks, `wikidata_verified`; backfills OSM tags from `osm_features`. |
 | `20260818_0025` | `20260818_0024` | Widens `source_osm_wikidata`, extends match status with `INVALID`, and adds `idx_analysis_areas_wikidata_id`; downgrade restores the prior contract. |
-| `20260819_0032` | `20260819_0031` | Adds the concurrent partial GiST index `idx_osm_features_poi_geometry` for the area POI query. The physical table belongs to OSM, but the revision is retained because it is part of the characterized area-POI performance contract. |
+| `20260819_0032` | `20260819_0031` | Historical OSM POI index. Runtime POI reads now use the public snapshot port; this adopted revision remains byte-identical because published migration history cannot be rewritten. |
 
 The Statistics revision `20260816_0016` creates `statistics_*` tables with FKs
 to `analysis_areas`. It remains intentionally host/Statistics-owned and is listed

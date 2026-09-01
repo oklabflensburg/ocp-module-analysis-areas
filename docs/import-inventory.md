@@ -1,7 +1,7 @@
 # Import inventory
 
-Pinned contract: `open-city-planner@81844b666aca8356f9c5cb9a86f00cf15b784f79`,
-Backend Module SDK `1.9.0`.
+Pinned contract: `open-city-planner@e1d7921698bb030f9e01de9ad16a9d85cb334b26`,
+Backend Module SDK `1.12.0`.
 
 | Standalone code | Imported surface | Status |
 | --- | --- | --- |
@@ -26,22 +26,16 @@ The former `integrations/legacy.py` adapter was deleted. Its replacements are:
 - Host GeoJSON, external-link, analytics and polygon-filter schemas → module-owned schemas;
 - Host POI category SQL → module-owned `AREA_POI_CATEGORY_SQL`.
 
-The earlier extraction deleted `application/legacy_sync.py` because it had no
-runtime registration inside the built-in module. Git history proves that Host CLI
-and OSM postprocessing consumers nevertheless existed. Its reinstatement is
-blocked on the public OSM, polygon-command, cache-mutation and postprocessing-event
-contracts inventoried in `sync-wikidata-parity.md`; no private replacement import
-was introduced.
+The earlier `application/legacy_sync.py` is replaced by `application/osm_sync.py`.
+It reads immutable, paginated OSM snapshots through
+`platform.osm-snapshot-query@1`, writes only module-owned tables and subscribes to
+`osm.postprocessing-completed@1`.
 
 The internal Wikidata enrichment implementation is written against public
-`DatabaseSessionProvider`, `CachePort` and optional `HttpClientFactoryPort`
-contracts. SDK 1.9 defines the HTTP port but the pinned production context does
-not wire it, so the trusted in-process provider adapter has an explicit `httpx`
-timeout/User-Agent/bounded-retry fallback with context-managed cleanup, without
-importing Host implementation. Host-owned HTTP-client infrastructure remains the
-architectural target. Neither scheduler nor service registry exposes Wikidata
-mutations until the public cache-generation port gains a transactional mutation
-operation.
+`DatabaseSessionProvider`, `CachePort`, `CacheGenerationPort` and required
+`HttpClientFactoryPort` contracts. The installable provider contains no direct
+`httpx` import. The scheduler and service registry expose safe refresh and manual
+maintenance paths.
 
 `backend/tests/test_contracts.py` rejects every `app.*` import other than
 `app.platform.modules.sdk` and rejects legacy files in the built wheel. The pinned
