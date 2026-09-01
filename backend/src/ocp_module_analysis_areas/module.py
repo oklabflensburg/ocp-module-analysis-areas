@@ -46,8 +46,8 @@ MANIFEST = parse_manifest(
         "manifest_version": 1,
         "id": "analysis-areas",
         "name": "Analysis Areas",
-        "version": "1.3.0",
-        "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.13.0,<2.0.0"},
+        "version": "1.4.0",
+        "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.14.0,<2.0.0"},
         "backend": {"package": "ocp-module-analysis-areas"},
         "frontend": {"package": "@open-city-planner/analysis-areas"},
         "capabilities": [

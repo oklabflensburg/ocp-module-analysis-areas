@@ -15,8 +15,8 @@ ADOPTED_FILES = {
     "20260818_0025": "20260818_0025_osm_external_links.py",
     "20260819_0032": "20260819_0032_optimize_area_poi_analytics.py",
 }
-EXPECTED_HEAD = "20260825_0034"
-EXPECTED_GRAPH_HEAD = "mod_reference_20260826_0001"
+EXPECTED_HEAD = "20260901_0035"
+EXPECTED_GRAPH_HEAD = "mod_reference_20260901_0002"
 CUTOVER_ENV = "analysis-areas"
 
 

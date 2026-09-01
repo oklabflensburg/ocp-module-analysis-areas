@@ -16,10 +16,10 @@ describe('Analysis Areas frontend module contract', () => {
     expect(definition).toMatchObject({
       schemaVersion: 1,
       id: 'analysis-areas',
-      version: '1.3.0',
+      version: '1.4.0',
       backendModuleId: 'analysis-areas',
       layer: 'layer',
-      compatibility: { sdk: '>=1.4.0 <2.0.0' }
+      compatibility: { sdk: '>=1.5.0 <2.0.0' }
     })
     expect(definition.publicContributions.routes.map((route: { path: string }) => route.path))
       .toEqual(['/gebiete', '/gebiete/:slug'])
@@ -32,6 +32,10 @@ describe('Analysis Areas frontend module contract', () => {
     expect(definition.publicContributions.map.sources.map((item: { id: string }) => item.id))
       .toEqual(['analysis-areas.data'])
     expect(definition.publicContributions.map.layers).toHaveLength(10)
+    expect(definition.publicContributions.sitemap).toEqual({
+      staticRoutes: ['/gebiete'],
+      dynamicRoutes: [{ route: '/gebiete/:slug', endpoint: '/analysis-areas/sitemap' }]
+    })
   })
 
   it('preserves detail, statistics, POI, OSM, map and SEO behavior', () => {
@@ -42,6 +46,8 @@ describe('Analysis Areas frontend module contract', () => {
       "api.statisticSeriesBySlug(slug, 'population')", '<AreaStatistics',
       'areaPoiMapLink(area.slug, item.category)', "path: '/karte'", 'useAnalysisAreaSeo'
     ]) expect(detail).toContain(value)
+    expect(detail).toContain("from '../../utils/areaPoiMapLink'")
+    expect(detail).not.toContain('areaPoiMapLink,\n  getIndustryColor')
     expect(detail).toContain('Externe Quellen')
     expect(detail).toContain('OpenStreetMap')
     expect(detail).toContain("import AnalysisAreaDetailMap from '../../components/analysis/AnalysisAreaDetailMap.vue'")

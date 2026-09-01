@@ -4,9 +4,9 @@ Standalone full-stack OCP module extracted from the built-in
 `analysis-areas` module in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
-Version `1.3.0` is validated against host commit
-`3bf1d00c687dd5ff9a5e912fd947d2d2d16dc667` on
-`staging/epic-91-modular-host`. This repository is the future source of truth;
+Version `1.4.0` is validated against host commit
+`e84a32a40dcb167b5e48698a4a1a7815ad4e809a` on
+`feat/196-statistics-boundary`. This repository is the future source of truth;
 the built-in remains in the host checkout and is excluded at composition time.
 
 ## Contents
@@ -47,7 +47,7 @@ scripts/build-bundle
 scripts/host-contract-test
 ```
 
-The resulting files are `dist/analysis-areas-1.3.0.ocp` and its `.sha256`.
+The resulting files are `dist/analysis-areas-1.4.0.ocp` and its `.sha256`.
 The `.ocp` is built by the pinned host's v1 builder, not by repository-local ZIP
 code.
 
@@ -70,8 +70,8 @@ Select the external owner through the shared host composition setting:
 ```bash
 cd open-city-planner/backend
 export OCP_EXCLUDED_BUILTIN_MODULES=analysis-areas
-uv run python -m app.cli.modules verify analysis-areas-1.3.0.ocp
-uv run python -m app.cli.modules install analysis-areas-1.3.0.ocp
+uv run python -m app.cli.modules verify analysis-areas-1.4.0.ocp
+uv run python -m app.cli.modules install analysis-areas-1.4.0.ocp
 uv run python -m app.cli.modules enable analysis-areas
 ```
 
@@ -86,7 +86,7 @@ are omitted from an isolated test copy for the exclusive-ownership graph check.
 
 ## Compatibility
 
-The backend requires Module SDK `>=1.13.0,<2.0.0`. It receives the database,
+The backend requires Module SDK `>=1.14.0,<2.0.0`. It receives the database,
 module-scoped cache, cache generations, public-query policy, map preview,
 polygon query/analytics and statistics capabilities exclusively through its
 `ModuleContext`. The installable Python package has no private Host imports.
