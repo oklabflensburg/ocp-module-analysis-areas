@@ -515,16 +515,32 @@ def main() -> None:
         assert enabled_environment["OCP_EXCLUDED_BUILTIN_MODULES"] == CUTOVER_ENV
         enabled = {**base_environment, **enabled_environment}
 
-        dependency_failure = cli(
+        cli(
             bundle_python,
             cutover_backend,
             install_root,
             base_environment,
             "disable",
             "statistics",
+        )
+        missing_statistics = generated_environment(
+            bundle_python, cutover_backend, install_root, base_environment
+        )
+        dependency_failure = run(
+            (str(bundle_python), "-c", "from app.main import app"),
+            cwd=cutover_backend,
+            environment={**base_environment, **missing_statistics},
             check=False,
         )
-        assert_failed(dependency_failure, "analysis-areas")
+        assert_failed(dependency_failure, 'requires module "statistics"')
+        cli(
+            bundle_python,
+            cutover_backend,
+            install_root,
+            base_environment,
+            "enable",
+            "statistics",
+        )
 
         backend_runtime_check(bundle_python, cutover_backend, enabled)
         sync_contract = run(
@@ -550,9 +566,12 @@ def main() -> None:
         assert "4 passed" in sync_contract.stdout, sync_contract.stdout
         frontend_output = frontend_check(cutover_frontend, enabled)
         assert "analysis-areas" in frontend_output
-        assert (cutover_frontend / "frontend-modules/analysis-areas/module.json").is_file()
-        installed_frontend_root = Path(
-            enabled_environment["OCP_INSTALLED_FRONTEND_MODULE_ROOTS"]
+        installed_frontend_root = next(
+            root
+            for value in enabled_environment["OCP_INSTALLED_FRONTEND_MODULE_ROOTS"].split(
+                os.pathsep
+            )
+            if (root := Path(value)).joinpath("analysis-areas/module.json").is_file()
         )
         assert (installed_frontend_root / "analysis-areas/module.json").is_file()
         installed_detail_map = (
