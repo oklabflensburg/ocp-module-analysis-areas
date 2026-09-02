@@ -140,9 +140,7 @@ def frontend_check(frontend: Path, environment: Mapping[str, str]) -> str:
     return result.stdout
 
 
-def backend_runtime_check(
-    python: Path, backend: Path, environment: Mapping[str, str]
-) -> None:
+def backend_runtime_check(python: Path, backend: Path, environment: Mapping[str, str]) -> None:
     probe = """
 import asyncio
 from datetime import UTC, datetime
@@ -303,18 +301,13 @@ def main() -> None:
 
     host_versions = host / "backend/alembic/versions"
     bundle_python = host / "backend/.venv/bin/python"
-    with TemporaryDirectory(
-        prefix=".ocp-analysis-areas-contract-", dir=repository
-    ) as temporary:
+    with TemporaryDirectory(prefix=".ocp-analysis-areas-contract-", dir=repository) as temporary:
         root = Path(temporary)
         cutover_host = root / "host"
         copy_cutover_host(host, cutover_host)
         cutover_backend = cutover_host / "backend"
         cutover_frontend = cutover_host / "frontend"
-        builtin_detail_map = (
-            cutover_frontend
-            / "app/components/analysis/AnalysisAreaDetailMap.vue"
-        )
+        builtin_detail_map = cutover_frontend / "app/components/analysis/AnalysisAreaDetailMap.vue"
         builtin_detail_map.unlink(missing_ok=True)
         assert not builtin_detail_map.exists()
         install_root = root / "modules"
@@ -434,9 +427,7 @@ def main() -> None:
             registry = build_persistence_registry(available)
 
             exclusive_config = Config(str(cutover_backend / "alembic.ini"))
-            exclusive_config.set_main_option(
-                "script_location", str(cutover_backend / "alembic")
-            )
+            exclusive_config.set_main_option("script_location", str(cutover_backend / "alembic"))
             coordinator = MigrationCoordinator(exclusive_config, registry)
             plan = coordinator.preflight()
             scripts = ScriptDirectory.from_config(exclusive_config)
@@ -446,10 +437,7 @@ def main() -> None:
                 assert path.is_relative_to(history.resolve())
             assert scripts.get_revision("20260819_0032").down_revision == "20260819_0031"
             assert scripts.get_revision("20260822_0033").down_revision == "20260819_0032"
-            assert any(
-                step.module_id == "host" and step.revision == EXPECTED_HEAD
-                for step in plan
-            )
+            assert any(step.module_id == "host" and step.revision == EXPECTED_HEAD for step in plan)
 
             # A database already at the complete graph head must not replay any
             # adopted historical revision.
@@ -508,9 +496,7 @@ def main() -> None:
             "analysis-areas",
             "statistics",
         }
-        assert "site-packages" in enabled_environment[
-            "OCP_ENABLED_INSTALLED_BACKEND_PATHS"
-        ]
+        assert "site-packages" in enabled_environment["OCP_ENABLED_INSTALLED_BACKEND_PATHS"]
         assert enabled_environment["OCP_INSTALLED_FRONTEND_MODULE_ROOTS"]
         assert enabled_environment["OCP_EXCLUDED_BUILTIN_MODULES"] == CUTOVER_ENV
         enabled = {**base_environment, **enabled_environment}
@@ -552,18 +538,19 @@ def main() -> None:
                     repository
                     / "tests/host-baseline/backend/tests/test_analysis_areas_characterization.py"
                 ),
+                str(repository / "tests/host-baseline/backend/tests/test_sync_sdk_113_contract.py"),
                 str(
                     repository
-                    / "tests/host-baseline/backend/tests/test_sync_sdk_113_contract.py"
+                    / "tests/host-baseline/backend/tests/test_statistics_service_postgres_contract.py"
                 ),
                 "-q",
             ),
             cwd=cutover_backend,
             environment=enabled,
         )
-        # Two characterization tests and two real PostGIS sync tests must run.
+        # Two characterization, two PostGIS sync, and one real Statistics test run.
         assert "skipped" not in sync_contract.stdout, sync_contract.stdout
-        assert "4 passed" in sync_contract.stdout, sync_contract.stdout
+        assert "5 passed" in sync_contract.stdout, sync_contract.stdout
         frontend_output = frontend_check(cutover_frontend, enabled)
         assert "analysis-areas" in frontend_output
         installed_frontend_root = next(
@@ -580,11 +567,10 @@ def main() -> None:
         )
         assert installed_detail_map.is_file()
         installed_detail_route = (
-            installed_frontend_root
-            / "analysis-areas/layer/app/pages/gebiete/[slug].vue"
+            installed_frontend_root / "analysis-areas/layer/app/pages/gebiete/[slug].vue"
         ).read_text(encoding="utf-8")
         assert "../../components/analysis/AnalysisAreaDetailMap.vue" in installed_detail_route
-        assert "@ready=\"mapReady = true\"" in installed_detail_route
+        assert '@ready="mapReady = true"' in installed_detail_route
         assert "data-social-preview-ready" in installed_detail_route
 
         run(("pnpm", "typecheck"), cwd=cutover_frontend, environment=enabled)
@@ -644,6 +630,7 @@ def main() -> None:
             "wikidata job/service/capability present; OSM/polygon/Statistics services resolved; "
             "OSM subscriber dispatched; real PostGIS spatial-match/identity/relation/"
             "upsert/generation chain; "
+            "real PostgreSQL Statistics selection/comparison/series/missing cases; "
             "backend/API characterization and frontend route/map discovery; "
             "built-in-free detail-map ownership and social-preview ready wiring; "
             "modules:check; typecheck; build; "
