@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/oklabflensburg/open-city-planner.git",
-  "commit": "43e72a683595c4679ee4e88f296a1a73de134b92",
+  "commit": "087eeb3f0275e687c4272137bdf50d8ddd8989f6",
   "source_branch": "refactor/slim-domain-free-host",
   "sdk_version": "1.15.0",
   "host_version": "0.2.0"
