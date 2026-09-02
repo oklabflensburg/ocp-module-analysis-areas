@@ -127,6 +127,7 @@ except ModuleNotFoundError:
         "PolygonIdentityPort",
         "PolygonQueryPort",
         "PolygonSpatialMatchPort",
+        "StatisticsQueryPort",
     ):
         setattr(sdk_module, name, Port)
     sdk_module.OsmFeatureCursor = OsmFeatureCursor
@@ -145,6 +146,8 @@ except ModuleNotFoundError:
     sdk_module.PolygonSpatialMatchResult = PolygonSpatialMatchResult
     sdk_module.StatisticsArea = StatisticsArea
     sdk_module.StatisticsSelection = StatisticsSelection
+    sdk_module.STATISTICS_QUERY_SERVICE_ID = "statistics.query"
+    sdk_module.STATISTICS_QUERY_SERVICE_VERSION = 1
     sys.modules.update(
         {
             "app": app_module,

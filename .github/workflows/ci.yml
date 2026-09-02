@@ -83,6 +83,11 @@ jobs:
           repository: oklabflensburg/open-city-planner
           ref: ${{ steps.contract.outputs.commit }}
           path: .host-contract
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: oklabflensburg/ocp-module-statistics
+          ref: 4525491995cddb7ad9670f456bba1a49e289f583
+          path: .statistics-module
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
@@ -102,6 +107,12 @@ jobs:
         working-directory: backend
       - run: pnpm install --frozen-lockfile
         working-directory: frontend
+      - run: uv sync --frozen --extra dev
+        working-directory: .statistics-module/backend
+      - run: pnpm install --frozen-lockfile
+        working-directory: .statistics-module/frontend
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/build-bundle
-      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/host-contract-test
-      - run: sha256sum -c dist/analysis-areas-1.4.0.ocp.sha256
+        working-directory: .statistics-module
+      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/build-bundle
+      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" OCP_STATISTICS_BUNDLE="$GITHUB_WORKSPACE/.statistics-module/dist/statistics-0.2.0.ocp" scripts/host-contract-test
+      - run: sha256sum -c dist/analysis-areas-1.5.0.ocp.sha256
