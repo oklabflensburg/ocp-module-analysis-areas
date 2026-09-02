@@ -44,12 +44,13 @@ def test_manifest_and_package_versions_are_consistent() -> None:
     frontend = json.loads((ROOT / "frontend/module.json").read_text(encoding="utf-8"))
     package = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
     assert manifest["id"] == frontend["id"] == frontend["backendModuleId"] == "analysis-areas"
-    assert manifest["version"] == frontend["version"] == package["version"] == "1.4.0"
+    assert manifest["version"] == frontend["version"] == package["version"] == "1.5.0"
     assert 'name = "ocp-module-analysis-areas"' in pyproject
-    assert 'version = "1.4.0"' in pyproject
+    assert 'version = "1.5.0"' in pyproject
     assert manifest["backend"]["package"] == "ocp-module-analysis-areas"
     assert manifest["frontend"]["package"] == "@open-city-planner/analysis-areas"
-    assert manifest["requires"]["sdk"] == ">=1.14.0,<2.0.0"
+    assert manifest["requires"]["sdk"] == ">=1.15.0,<2.0.0"
+    assert manifest["requires"]["modules"] == {"statistics": ">=0.2.0,<1.0.0"}
     assert manifest["persistence"]["migrations"] is True
     assert manifest["capabilities"] == [
         "analysis-areas.public-api",
@@ -75,15 +76,15 @@ def test_wikidata_mutations_are_public_and_transactionally_invalidated() -> None
     assert "async def set_manual_match(" in application_source
 
 
-def test_host_contract_is_exact_sdk_1_14_prerequisite() -> None:
+def test_host_contract_is_exact_sdk_1_15_prerequisite() -> None:
     contract = json.loads(
         (ROOT / ".github/ocp-host-contract.json").read_text(encoding="utf-8")
     )
     assert contract == {
         "repository": "https://github.com/oklabflensburg/open-city-planner.git",
-        "commit": "410e9ba5dff2e3ed702d1a4ced95a5e5524cb52e",
-        "source_branch": "staging/epic-91-modular-host",
-        "sdk_version": "1.14.0",
+        "commit": "43e72a683595c4679ee4e88f296a1a73de134b92",
+        "source_branch": "refactor/slim-domain-free-host",
+        "sdk_version": "1.15.0",
         "host_version": "0.2.0",
     }
 
@@ -114,6 +115,8 @@ def test_runtime_has_no_direct_provider_or_foreign_domain_access() -> None:
     assert "import httpx" not in combined
     assert not re.search(r"\b(?:FROM|JOIN|UPDATE|INTO|DELETE FROM)\s+osm_features\b", combined)
     assert not re.search(r"\b(?:FROM|JOIN|UPDATE|INTO|DELETE FROM)\s+user_polygons\b", combined)
+    assert "context.statistics" not in combined
+    assert "STATISTICS_QUERY_SERVICE_ID" in (PACKAGE / "module.py").read_text()
 
 
 def test_polygon_reconcile_uses_only_public_contracts_and_owned_relation() -> None:
@@ -167,10 +170,10 @@ def test_built_wheel_has_one_namespace_entry_point_and_migrations() -> None:
         roots = {name.split("/", 1)[0] for name in names}
         assert roots == {
             "ocp_module_analysis_areas",
-            "ocp_module_analysis_areas-1.4.0.dist-info",
+            "ocp_module_analysis_areas-1.5.0.dist-info",
         }
         entry_points = archive.read(
-            "ocp_module_analysis_areas-1.4.0.dist-info/entry_points.txt"
+            "ocp_module_analysis_areas-1.5.0.dist-info/entry_points.txt"
         ).decode()
         assert "[open_city_planner.modules]" in entry_points
         assert "analysis-areas = ocp_module_analysis_areas.module:DEFINITION" in entry_points

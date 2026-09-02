@@ -43,6 +43,11 @@ jobs:
           repository: oklabflensburg/open-city-planner
           ref: ${{ steps.contract.outputs.commit }}
           path: .host-contract
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: oklabflensburg/ocp-module-statistics
+          ref: 09adbc4c35555450834b2321148781aa713fc300
+          path: .statistics-module
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
@@ -68,9 +73,15 @@ jobs:
         working-directory: .host-contract/backend
       - run: pnpm install --frozen-lockfile
         working-directory: .host-contract/frontend
+      - run: uv sync --frozen --extra dev
+        working-directory: .statistics-module/backend
+      - run: pnpm install --frozen-lockfile
+        working-directory: .statistics-module/frontend
+      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/build-bundle
+        working-directory: .statistics-module
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" SOURCE_COMMIT="$SOURCE_COMMIT" scripts/build-bundle
-      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/host-contract-test
-      - run: sha256sum -c dist/analysis-areas-1.4.0.ocp.sha256
+      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" OCP_STATISTICS_BUNDLE="$GITHUB_WORKSPACE/.statistics-module/dist/statistics-0.2.0.ocp" scripts/host-contract-test
+      - run: sha256sum -c dist/analysis-areas-1.5.0.ocp.sha256
       - name: Publish immutable release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,8 +91,8 @@ jobs:
             exit 1
           fi
           gh release create "$RELEASE_TAG" \
-            dist/analysis-areas-1.4.0.ocp \
-            dist/analysis-areas-1.4.0.ocp.sha256 \
+            dist/analysis-areas-1.5.0.ocp \
+            dist/analysis-areas-1.5.0.ocp.sha256 \
             --verify-tag \
             --title "$RELEASE_TAG" \
             --notes "First standalone release extracted from Open City Planner built-in module"

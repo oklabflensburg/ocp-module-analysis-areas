@@ -16,7 +16,7 @@ describe('Analysis Areas frontend module contract', () => {
     expect(definition).toMatchObject({
       schemaVersion: 1,
       id: 'analysis-areas',
-      version: '1.4.0',
+      version: '1.5.0',
       backendModuleId: 'analysis-areas',
       layer: 'layer',
       compatibility: { sdk: '>=1.5.0 <2.0.0' }

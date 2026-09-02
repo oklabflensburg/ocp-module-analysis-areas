@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const output = path.join(root, 'dist', 'analysis-areas-1.4.0.tgz')
+const output = path.join(root, 'dist', 'analysis-areas-1.5.0.tgz')
 await rm(path.join(root, 'dist'), { recursive: true, force: true })
 await mkdir(path.dirname(output), { recursive: true })
 const staging = await mkdtemp(path.join(os.tmpdir(), 'analysis-areas-frontend-'))

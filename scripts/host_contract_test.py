@@ -17,7 +17,7 @@ ADOPTED_FILES = {
 }
 EXPECTED_HEAD = "20260901_0035"
 EXPECTED_GRAPH_HEAD = "mod_reference_20260901_0002"
-CUTOVER_ENV = "analysis-areas"
+CUTOVER_ENV = ""
 
 
 def run(
@@ -158,10 +158,13 @@ from app.platform.modules.sdk import (
     POLYGON_IDENTITY_SERVICE_VERSION,
     POLYGON_SPATIAL_MATCH_SERVICE_ID,
     POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
+    STATISTICS_QUERY_SERVICE_ID,
+    STATISTICS_QUERY_SERVICE_VERSION,
     OsmSnapshotQueryPort,
     OsmPostprocessingCompleted,
     PolygonSpatialMatchPort,
     PolygonIdentityPort,
+    StatisticsQueryPort,
     event_envelope,
 )
 from ocp_module_analysis_areas.contracts import (
@@ -230,6 +233,11 @@ assert services.require(
     service_id=POLYGON_IDENTITY_SERVICE_ID,
     version=POLYGON_IDENTITY_SERVICE_VERSION,
 ) is not None
+assert services.require(
+    StatisticsQueryPort,
+    service_id=STATISTICS_QUERY_SERVICE_ID,
+    version=STATISTICS_QUERY_SERVICE_VERSION,
+) is not None
 subscription = event_bus.subscription("analysis-areas.sync-after-osm-postprocessing")
 assert subscription is not None
 assert subscription.event_name == OSM_POSTPROCESSING_COMPLETED_EVENT
@@ -250,6 +258,7 @@ def main() -> None:
     repository = Path(__file__).resolve().parents[1]
     host = Path(sys.argv[1]).resolve()
     bundle = Path(sys.argv[2]).resolve()
+    statistics_bundle = Path(sys.argv[3]).resolve()
     contract = json.loads(
         (repository / ".github/ocp-host-contract.json").read_text(encoding="utf-8")
     )
@@ -306,7 +315,7 @@ def main() -> None:
             cutover_frontend
             / "app/components/analysis/AnalysisAreaDetailMap.vue"
         )
-        builtin_detail_map.unlink()
+        builtin_detail_map.unlink(missing_ok=True)
         assert not builtin_detail_map.exists()
         install_root = root / "modules"
         base_environment = {
@@ -317,19 +326,6 @@ def main() -> None:
             "OCP_INSTALLED_FRONTEND_MODULE_ROOTS": "",
             "OCP_MODULE_INSTALL_ROOT": str(install_root),
         }
-
-        # Without explicit cutover, the normal installer rejects the built-in ID.
-        no_cutover = {**base_environment, "OCP_EXCLUDED_BUILTIN_MODULES": ""}
-        collision = cli(
-            bundle_python,
-            cutover_backend,
-            root / "collision",
-            no_cutover,
-            "verify",
-            str(bundle),
-            check=False,
-        )
-        assert_failed(collision, "already belongs to a built-in module")
 
         verified = cli(
             bundle_python,
@@ -353,6 +349,18 @@ def main() -> None:
         )
         installed = json_output(installed_result)
         assert installed["enabled"] is False
+        statistics_installed = json_output(
+            cli(
+                bundle_python,
+                cutover_backend,
+                install_root,
+                base_environment,
+                "install",
+                str(statistics_bundle),
+            )
+        )
+        assert statistics_installed["id"] == "statistics"
+        assert statistics_installed["enabled"] is False
         disabled_environment = generated_environment(
             bundle_python, cutover_backend, install_root, base_environment
         )
@@ -365,17 +373,32 @@ def main() -> None:
         )
 
         installed_paths = installed_backend_distribution_paths(install_root)
-        assert len(installed_paths) == 1
+        assert len(installed_paths) == 2
+        analysis_path = next(
+            path for path in installed_paths if (path / "ocp_module_analysis_areas").is_dir()
+        )
+        statistics_path = next(
+            path for path in installed_paths if (path / "ocp_module_statistics").is_dir()
+        )
         run(
             (
                 str(bundle_python),
                 str(host / "scripts/check_external_module_imports.py"),
-                str(installed_paths[0] / "ocp_module_analysis_areas"),
+                str(analysis_path / "ocp_module_analysis_areas"),
             ),
             cwd=cutover_backend,
             environment=base_environment,
         )
-        history = installed_paths[0] / "ocp_module_analysis_areas/migrations/history"
+        run(
+            (
+                str(bundle_python),
+                str(host / "scripts/check_external_module_imports.py"),
+                str(statistics_path / "ocp_module_statistics"),
+            ),
+            cwd=cutover_backend,
+            environment=base_environment,
+        )
+        history = analysis_path / "ocp_module_analysis_areas/migrations/history"
         assert {path.name for path in history.glob("*.py")} == {
             "__init__.py",
             *ADOPTED_FILES.values(),
@@ -464,19 +487,44 @@ def main() -> None:
             install_root,
             base_environment,
             "enable",
+            "statistics",
+        )
+        cli(
+            bundle_python,
+            cutover_backend,
+            install_root,
+            base_environment,
+            "enable",
             "analysis-areas",
         )
         enabled_environment = generated_environment(
             bundle_python, cutover_backend, install_root, base_environment
         )
-        assert enabled_environment["ENABLED_MODULES"] == "analysis-areas"
-        assert enabled_environment["OCP_FRONTEND_MODULES"] == "analysis-areas"
+        assert set(enabled_environment["ENABLED_MODULES"].split(",")) == {
+            "analysis-areas",
+            "statistics",
+        }
+        assert set(enabled_environment["OCP_FRONTEND_MODULES"].split(",")) == {
+            "analysis-areas",
+            "statistics",
+        }
         assert "site-packages" in enabled_environment[
             "OCP_ENABLED_INSTALLED_BACKEND_PATHS"
         ]
         assert enabled_environment["OCP_INSTALLED_FRONTEND_MODULE_ROOTS"]
         assert enabled_environment["OCP_EXCLUDED_BUILTIN_MODULES"] == CUTOVER_ENV
         enabled = {**base_environment, **enabled_environment}
+
+        dependency_failure = cli(
+            bundle_python,
+            cutover_backend,
+            install_root,
+            base_environment,
+            "disable",
+            "statistics",
+            check=False,
+        )
+        assert_failed(dependency_failure, "analysis-areas")
 
         backend_runtime_check(bundle_python, cutover_backend, enabled)
         sync_contract = run(
@@ -520,22 +568,6 @@ def main() -> None:
         assert "@ready=\"mapReady = true\"" in installed_detail_route
         assert "data-social-preview-ready" in installed_detail_route
 
-        # Both backend and frontend must fail fast without explicit source ownership.
-        duplicate_backend = run(
-            (str(bundle_python), "-c", "from app.main import app"),
-            cwd=cutover_backend,
-            environment={**enabled, "OCP_EXCLUDED_BUILTIN_MODULES": ""},
-            check=False,
-        )
-        assert_failed(duplicate_backend, "Duplicate module ID")
-        duplicate_frontend = run(
-            ("pnpm", "modules:check"),
-            cwd=cutover_frontend,
-            environment={**enabled, "OCP_EXCLUDED_BUILTIN_MODULES": ""},
-            check=False,
-        )
-        assert_failed(duplicate_frontend, "Duplicate frontend module ID")
-
         run(("pnpm", "typecheck"), cwd=cutover_frontend, environment=enabled)
         run(("pnpm", "build"), cwd=cutover_frontend, environment=enabled)
 
@@ -550,11 +582,12 @@ def main() -> None:
         after_disable = generated_environment(
             bundle_python, cutover_backend, install_root, base_environment
         )
-        assert after_disable["OCP_ENABLED_INSTALLED_BACKEND_PATHS"] == ""
-        assert after_disable["OCP_FRONTEND_MODULES"] == ""
+        assert after_disable["ENABLED_MODULES"] == "statistics"
+        assert after_disable["OCP_BACKEND_MODULES"] == "statistics"
+        assert after_disable["OCP_FRONTEND_MODULES"] == "statistics"
         assert after_disable["OCP_INSTALLED_FRONTEND_MODULE_ROOTS"]
         assert after_disable["OCP_EXCLUDED_BUILTIN_MODULES"] == CUTOVER_ENV
-        assert "no optional modules enabled" in frontend_check(
+        assert "statistics" in frontend_check(
             cutover_frontend, {**base_environment, **after_disable}
         )
         disabled_passive = run(
@@ -587,9 +620,9 @@ def main() -> None:
 
         print(
             "host contract passed: normal verify/install disabled; passive migrations; "
-            "installed-package import guard; "
-            "exclusive ownership; duplicate fail-fast; normal CLI enable/disable/re-enable; "
-            "wikidata job/service/capability present; OSM/polygon services resolved; "
+            "installed-package import guards; Statistics dependency fail-fast; "
+            "exclusive ownership; normal CLI enable/disable/re-enable; "
+            "wikidata job/service/capability present; OSM/polygon/Statistics services resolved; "
             "OSM subscriber dispatched; real PostGIS spatial-match/identity/relation/"
             "upsert/generation chain; "
             "backend/API characterization and frontend route/map discovery; "

@@ -4,10 +4,9 @@ Standalone full-stack OCP module extracted from the built-in
 `analysis-areas` module in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
-Version `1.4.0` is validated against host commit
-`410e9ba5dff2e3ed702d1a4ced95a5e5524cb52e` on
-`staging/epic-91-modular-host`. This repository is the future source of truth;
-the built-in remains in the host checkout and is excluded at composition time.
+Version `1.5.0` consumes the required Statistics query service through the public
+service registry and targets Module SDK `>=1.15.0,<2.0.0`. This repository is the
+source of truth; the Slim Host contains no built-in Analysis Areas runtime.
 
 ## Contents
 
@@ -47,7 +46,7 @@ scripts/build-bundle
 scripts/host-contract-test
 ```
 
-The resulting files are `dist/analysis-areas-1.4.0.ocp` and its `.sha256`.
+The resulting files are `dist/analysis-areas-1.5.0.ocp` and its `.sha256`.
 The `.ocp` is built by the pinned host's v1 builder, not by repository-local ZIP
 code.
 
@@ -65,13 +64,12 @@ path. A generic argument-bearing operator CLI remains a convenience gap.
 
 ## Installation and cutover
 
-Select the external owner through the shared host composition setting:
+Install Statistics first, then install Analysis Areas:
 
 ```bash
 cd open-city-planner/backend
-export OCP_EXCLUDED_BUILTIN_MODULES=analysis-areas
-uv run python -m app.cli.modules verify analysis-areas-1.4.0.ocp
-uv run python -m app.cli.modules install analysis-areas-1.4.0.ocp
+uv run python -m app.cli.modules verify analysis-areas-1.5.0.ocp
+uv run python -m app.cli.modules install analysis-areas-1.5.0.ocp
 uv run python -m app.cli.modules enable analysis-areas
 ```
 
@@ -80,16 +78,16 @@ frontend package, tables and packaged migration history.
 
 `scripts/host-contract-test` uses the normal Host CLI, installer, first-party and
 entry-point discovery, generated `modules env`, frontend discovery, typecheck and
-production build. The Built-in backend and frontend stay on disk and are excluded
-only by `OCP_EXCLUDED_BUILTIN_MODULES`. Only the four duplicate Host Alembic files
+production build. Only the four duplicate Host Alembic files
 are omitted from an isolated test copy for the exclusive-ownership graph check.
 
 ## Compatibility
 
-The backend requires Module SDK `>=1.14.0,<2.0.0`. It receives the database,
+The backend requires Module SDK `>=1.15.0,<2.0.0`. It receives the database,
 module-scoped cache, cache generations, public-query policy, map preview,
-polygon query/analytics and statistics capabilities exclusively through its
-`ModuleContext`. The installable Python package has no private Host imports.
+polygon query/analytics capabilities through `ModuleContext` and resolves
+`statistics.query@1` through the service registry. The installable Python package
+has no private Host imports.
 Analysis-Areas-specific schemas, filter parsing, cache keys and the spatial POI
 query remain module-owned.
 Wikidata is a module-owned external-provider adapter using only the production

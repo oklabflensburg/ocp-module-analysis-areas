@@ -9,6 +9,8 @@ from app.platform.modules.sdk import (
     POLYGON_IDENTITY_SERVICE_VERSION,
     POLYGON_SPATIAL_MATCH_SERVICE_ID,
     POLYGON_SPATIAL_MATCH_SERVICE_VERSION,
+    STATISTICS_QUERY_SERVICE_ID,
+    STATISTICS_QUERY_SERVICE_VERSION,
     JobDefinition,
     JobSchedule,
     ModuleContext,
@@ -19,6 +21,7 @@ from app.platform.modules.sdk import (
     OsmSnapshotQueryPort,
     PolygonIdentityPort,
     PolygonSpatialMatchPort,
+    StatisticsQueryPort,
     parse_manifest,
 )
 
@@ -46,8 +49,12 @@ MANIFEST = parse_manifest(
         "manifest_version": 1,
         "id": "analysis-areas",
         "name": "Analysis Areas",
-        "version": "1.4.0",
-        "requires": {"host": ">=0.2.0,<1.0.0", "sdk": ">=1.14.0,<2.0.0"},
+        "version": "1.5.0",
+        "requires": {
+            "host": ">=0.2.0,<1.0.0",
+            "sdk": ">=1.15.0,<2.0.0",
+            "modules": {"statistics": ">=0.2.0,<1.0.0"},
+        },
         "backend": {"package": "ocp-module-analysis-areas"},
         "frontend": {"package": "@open-city-planner/analysis-areas"},
         "capabilities": [
@@ -75,7 +82,6 @@ class AnalysisAreasModule:
             "map previews": context.map_previews,
             "polygon queries": context.polygons,
             "polygon analytics": context.polygon_analytics,
-            "statistics": context.statistics,
             "settings": context.settings,
             "events": context.events,
             "HTTP": context.http,
@@ -95,7 +101,6 @@ class AnalysisAreasModule:
         assert context.map_previews is not None
         assert context.polygons is not None
         assert context.polygon_analytics is not None
-        assert context.statistics is not None
         assert context.settings is not None
         assert context.events is not None
         assert context.http is not None
@@ -116,6 +121,11 @@ class AnalysisAreasModule:
             service_id=POLYGON_IDENTITY_SERVICE_ID,
             version=POLYGON_IDENTITY_SERVICE_VERSION,
         )
+        statistics = context.services.require(
+            StatisticsQueryPort,
+            service_id=STATISTICS_QUERY_SERVICE_ID,
+            version=STATISTICS_QUERY_SERVICE_VERSION,
+        )
         router = create_router(
             context.database,
             context.cache,
@@ -125,7 +135,7 @@ class AnalysisAreasModule:
             context.polygons,
             context.polygon_analytics,
             osm_snapshots,
-            context.statistics,
+            statistics,
             settings,
         )
         context.api.include_router(router, prefix="/api/v1", tags=("Analysis Areas",))
