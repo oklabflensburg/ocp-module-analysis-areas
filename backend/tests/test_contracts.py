@@ -82,7 +82,7 @@ def test_host_contract_is_exact_sdk_1_15_prerequisite() -> None:
     )
     assert contract == {
         "repository": "https://github.com/oklabflensburg/open-city-planner.git",
-        "commit": "087eeb3f0275e687c4272137bdf50d8ddd8989f6",
+        "commit": "9c118f3685c8311e37ef7b2d5a265d01997ac9f0",
         "source_branch": "refactor/slim-domain-free-host",
         "sdk_version": "1.15.0",
         "host_version": "0.2.0",
