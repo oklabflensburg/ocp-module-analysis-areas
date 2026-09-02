@@ -13,6 +13,9 @@ on:
 permissions:
   contents: write
 
+env:
+  OCP_CI_RUN_KEY: ocp-release-${{ github.run_id }}-${{ github.run_attempt }}
+
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   cancel-in-progress: false
@@ -20,9 +23,25 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5@sha256:19b6ffa248d2f864d29d6c338459f02d63c0d7ce341fa86b3bcba8484a130bff
+        env:
+          POSTGRES_DB: open_city_map_test
+          POSTGRES_PASSWORD: ${{ env.OCP_CI_RUN_KEY }}
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d open_city_map_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
+      - name: Configure PostGIS contract database
+        run: echo "DATABASE_URL=postgresql+asyncpg://postgres:${OCP_CI_RUN_KEY}@127.0.0.1:5432/open_city_map_test" >> "${GITHUB_ENV}"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/tags/${{ env.RELEASE_TAG }}
