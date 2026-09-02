@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: oklabflensburg/ocp-module-statistics
-          ref: 1f651f125538ea2718f7d4c4ee260224b2ee9ce1
+          ref: 4525491995cddb7ad9670f456bba1a49e289f583
           path: .statistics-module
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
