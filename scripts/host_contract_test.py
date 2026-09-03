@@ -65,10 +65,6 @@ def copy_cutover_host(host: Path, destination: Path) -> None:
         copy_function=os.link,
         symlinks=True,
     )
-    for filename in ADOPTED_FILES.values():
-        (destination / "backend/alembic/versions" / filename).unlink()
-
-
 def cli(
     python: Path,
     backend: Path,
@@ -285,7 +281,6 @@ def main() -> None:
         FirstPartyModuleDiscovery,
         scoped_module_python_paths,
     )
-    from app.platform.modules.errors import ModulePersistenceError
     from app.platform.modules.installer import installed_backend_distribution_paths
     from app.platform.modules.migrations import MigrationCoordinator
     from app.platform.modules.persistence import (
@@ -300,6 +295,13 @@ def main() -> None:
         )
 
     host_versions = host / "backend/alembic/versions"
+    module_history = (
+        repository / "backend/src/ocp_module_analysis_areas/migrations/history"
+    )
+    for filename in ADOPTED_FILES.values():
+        assert not (host_versions / filename).exists(), (
+            f"Built-in Analysis Areas migration still present in Host: {filename}"
+        )
     bundle_python = host / "backend/.venv/bin/python"
     with TemporaryDirectory(prefix=".ocp-analysis-areas-contract-", dir=repository) as temporary:
         root = Path(temporary)
@@ -332,16 +334,6 @@ def main() -> None:
         with staged_ocp_bundle(bundle) as (_package_root, package):
             assert verified_package["bundle_sha256"] == package.bundle_sha256
 
-        installed_result = cli(
-            bundle_python,
-            cutover_backend,
-            install_root,
-            base_environment,
-            "install",
-            str(bundle),
-        )
-        installed = json_output(installed_result)
-        assert installed["enabled"] is False
         statistics_installed = json_output(
             cli(
                 bundle_python,
@@ -354,6 +346,16 @@ def main() -> None:
         )
         assert statistics_installed["id"] == "statistics"
         assert statistics_installed["enabled"] is False
+        installed_result = cli(
+            bundle_python,
+            cutover_backend,
+            install_root,
+            base_environment,
+            "install",
+            str(bundle),
+        )
+        installed = json_output(installed_result)
+        assert installed["enabled"] is False
         disabled_environment = generated_environment(
             bundle_python, cutover_backend, install_root, base_environment
         )
@@ -397,7 +399,7 @@ def main() -> None:
             *ADOPTED_FILES.values(),
         }
         for filename in ADOPTED_FILES.values():
-            assert (history / filename).read_bytes() == (host_versions / filename).read_bytes()
+            assert (history / filename).read_bytes() == (module_history / filename).read_bytes()
 
         # Disabled installation still participates in passive migration discovery.
         passive = run(
@@ -459,14 +461,6 @@ def main() -> None:
             finally:
                 migrations_module.command.upgrade = original_upgrade
 
-            duplicate_config = Config(str(host / "backend/alembic.ini"))
-            try:
-                MigrationCoordinator(duplicate_config, registry).preflight()
-            except ModulePersistenceError as exc:
-                assert "multiple migration sources" in str(exc)
-                assert "20260814_0014" in str(exc)
-            else:
-                raise AssertionError("duplicate host/module revisions were accepted")
         assert sys.path == python_path_before
 
         cli(

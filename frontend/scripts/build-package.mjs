@@ -1,13 +1,20 @@
-import { cp, lstat, mkdir, mkdtemp, readdir, rename, rm } from 'node:fs/promises'
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const output = path.join(root, 'dist', 'analysis-areas-1.5.0.tgz')
-await rm(path.join(root, 'dist'), { recursive: true, force: true })
+const packageMetadata = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+const moduleMetadata = JSON.parse(await readFile(path.join(root, 'module.json'), 'utf8'))
+if (packageMetadata.version !== moduleMetadata.version) {
+  throw new Error(`Package/module version mismatch: ${packageMetadata.version} != ${moduleMetadata.version}`)
+}
+const output = process.env.OCP_FRONTEND_OUTPUT
+  ? path.resolve(process.env.OCP_FRONTEND_OUTPUT)
+  : path.join(root, 'dist', `${moduleMetadata.id}-${moduleMetadata.version}.tgz`)
 await mkdir(path.dirname(output), { recursive: true })
+await rm(output, { force: true })
 const staging = await mkdtemp(path.join(os.tmpdir(), 'analysis-areas-frontend-'))
 
 try {
@@ -40,6 +47,9 @@ try {
   }
   await rm(path.join(staging, 'node_modules'), { recursive: true, force: true })
   await rename(flatModules, path.join(staging, 'node_modules'))
+  // pnpm-generated command shims contain the random deploy directory in NODE_PATH.
+  // They are build-time executables, not runtime dependencies of the Nuxt layer.
+  await removeBinDirectories(path.join(staging, 'node_modules'))
   await assertNoLinks(staging)
 
   const archive = spawnSync('tar', [
@@ -70,5 +80,16 @@ async function assertNoLinks(directory) {
     const metadata = await lstat(target)
     if (metadata.isSymbolicLink()) throw new Error(`Frontend archive cannot contain link: ${target}`)
     if (metadata.isDirectory()) await assertNoLinks(target)
+  }
+}
+
+async function removeBinDirectories(directory) {
+  for (const entry of await readdir(directory)) {
+    const target = path.join(directory, entry)
+    if (entry === '.bin') {
+      await rm(target, { recursive: true, force: true })
+    } else if (await isDirectory(target)) {
+      await removeBinDirectories(target)
+    }
   }
 }

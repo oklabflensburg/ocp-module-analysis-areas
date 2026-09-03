@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const definition = JSON.parse(readFileSync(`${root}/module.json`, 'utf8'))
+const packageDefinition = JSON.parse(readFileSync(`${root}/package.json`, 'utf8'))
 const source = (path: string) => readFileSync(`${root}/${path}`, 'utf8')
 const layerSources = (directory = `${root}/layer`): string[] => readdirSync(directory)
   .flatMap(entry => {
@@ -16,7 +17,7 @@ describe('Analysis Areas frontend module contract', () => {
     expect(definition).toMatchObject({
       schemaVersion: 1,
       id: 'analysis-areas',
-      version: '1.5.0',
+      version: packageDefinition.version,
       backendModuleId: 'analysis-areas',
       layer: 'layer',
       compatibility: { sdk: '>=1.5.0 <2.0.0' }
@@ -74,7 +75,6 @@ describe('Analysis Areas frontend module contract', () => {
   })
 
   it('declares every direct runtime import and rejects private Host imports', () => {
-    const packageDefinition = JSON.parse(source('package.json'))
     expect(packageDefinition.dependencies).toMatchObject({ 'maplibre-gl': '6.4.1' })
     for (const path of layerSources()) {
       const contents = readFileSync(path, 'utf8')

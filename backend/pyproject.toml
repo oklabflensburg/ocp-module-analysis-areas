@@ -1,6 +1,6 @@
 [project]
 name = "ocp-module-analysis-areas"
-version = "1.5.0"
+version = "1.5.1"
 description = "Analysis Areas module for Open City Planner"
 readme = "README.md"
 license = "AGPL-3.0-only"

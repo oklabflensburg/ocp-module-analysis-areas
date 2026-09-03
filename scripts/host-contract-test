@@ -4,5 +4,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 host_root="${OCP_HOST_CHECKOUT:-$repo_root/.host-contract}"
 statistics_bundle="${OCP_STATISTICS_BUNDLE:-$repo_root/../ocp-module-statistics/dist/statistics-0.2.0.ocp}"
+version="$("$repo_root/backend/.venv/bin/python" "$repo_root/scripts/release_metadata.py" --field version)"
 exec "$host_root/backend/.venv/bin/python" "$repo_root/scripts/host_contract_test.py" \
-  "$host_root" "$repo_root/dist/analysis-areas-1.5.0.ocp" "$statistics_bundle"
+  "$host_root" "$repo_root/dist/analysis-areas-${version}.ocp" "$statistics_bundle"

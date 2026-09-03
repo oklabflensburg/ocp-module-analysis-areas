@@ -49,7 +49,7 @@ MANIFEST = parse_manifest(
         "manifest_version": 1,
         "id": "analysis-areas",
         "name": "Analysis Areas",
-        "version": "1.5.0",
+        "version": "1.5.1",
         "requires": {
             "host": ">=0.2.0,<1.0.0",
             "sdk": ">=1.15.0,<2.0.0",

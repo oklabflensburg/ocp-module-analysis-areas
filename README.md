@@ -4,7 +4,7 @@ Standalone full-stack OCP module extracted from the built-in
 `analysis-areas` module in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
-Version `1.5.0` consumes the required Statistics query service through the public
+Version `1.5.1` consumes the required Statistics query service through the public
 service registry and targets Module SDK `>=1.15.0,<2.0.0`. This repository is the
 source of truth; the Slim Host contains no built-in Analysis Areas runtime.
 
@@ -42,13 +42,25 @@ Prepare and test the exact host contract:
 
 ```bash
 scripts/prepare-host-contract
-scripts/build-bundle
+scripts/verify-reproducible-bundle
 scripts/host-contract-test
 ```
 
-The resulting files are `dist/analysis-areas-1.5.0.ocp` and its `.sha256`.
+The resulting files are `dist/analysis-areas-1.5.1.ocp` and its `.sha256`.
 The `.ocp` is built by the pinned host's v1 builder, not by repository-local ZIP
 code.
+
+The reproducibility check creates two empty source staging trees from the same Git
+commit. Each tree independently builds its backend wheel, frontend TGZ, OCP bundle
+and checksum. Wheel, TGZ and bundle bytes are compared separately before one checked
+bundle is copied to `dist/`. This proves a complete reproducible source build, not
+only deterministic assembly of an outer OCP container.
+
+The pinned Host verifier checks the outer container and payload checksums during the
+lifecycle test. `scripts/release_metadata.py` separately checks the embedded module
+ID, version, bundle format, component names, publisher and source provenance.
+`scripts/build-bundle` remains available for a single complete local build; it is not
+by itself the two-build reproducibility proof.
 
 ## Wikidata operations
 
@@ -68,8 +80,8 @@ Install Statistics first, then install Analysis Areas:
 
 ```bash
 cd open-city-planner/backend
-uv run python -m app.cli.modules verify analysis-areas-1.5.0.ocp
-uv run python -m app.cli.modules install analysis-areas-1.5.0.ocp
+uv run python -m app.cli.modules verify analysis-areas-1.5.1.ocp
+uv run python -m app.cli.modules install analysis-areas-1.5.1.ocp
 uv run python -m app.cli.modules enable analysis-areas
 ```
 
@@ -78,8 +90,9 @@ frontend package, tables and packaged migration history.
 
 `scripts/host-contract-test` uses the normal Host CLI, installer, first-party and
 entry-point discovery, generated `modules env`, frontend discovery, typecheck and
-production build. Only the four duplicate Host Alembic files
-are omitted from an isolated test copy for the exclusive-ownership graph check.
+production build. It requires the built-in-free Host to contain none of the four
+adopted Analysis Areas migration files and verifies their exclusive discovery from
+the installed module.
 
 ## Compatibility
 
@@ -102,8 +115,8 @@ Existing Alembic IDs and their host-chain `down_revision` links are not renamed.
 The module declares all four IDs explicitly through the SDK adoption contract;
 future migrations must use `mod_analysis_areas_*` and extend the then-current
 global head. No baseline table creation, graph rewrite, or data copy was introduced.
-The lifecycle test removes duplicate built-in migration sources only in its
-isolated cutover copy and validates passive discovery while installation is disabled.
+The lifecycle test validates exclusive passive migration discovery while installation
+is disabled; it does not rewrite the built-in-free Host migration graph.
 
 Detailed evidence:
 

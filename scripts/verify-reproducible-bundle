@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+metadata_python="$repo_root/backend/.venv/bin/python"
+backend_relative="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --field backend_artifact)"
+frontend_relative="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --field frontend_artifact)"
+bundle_relative="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --field bundle_artifact)"
+source_commit="${SOURCE_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}"
+output="${BUNDLE_OUTPUT:-$repo_root/$bundle_relative}"
+builds_root="$(mktemp -d)"
+build_a="$builds_root/build-a"
+build_b="$builds_root/build-b"
+trap 'rm -rf "$builds_root"' EXIT
+
+OCP_BUILD_ROOT="$build_a" SOURCE_COMMIT="$source_commit" "$repo_root/scripts/build-bundle"
+OCP_BUILD_ROOT="$build_b" SOURCE_COMMIT="$source_commit" "$repo_root/scripts/build-bundle"
+
+compare_artifact() {
+  local label="$1"
+  local relative="$2"
+  local first="$build_a/$relative"
+  local second="$build_b/$relative"
+  if ! cmp --silent "$first" "$second"; then
+    echo "Full-build reproducibility failed for $label from $source_commit." >&2
+    sha256sum "$first" "$second" >&2
+    exit 1
+  fi
+  printf '%s SHA-256: ' "$label"
+  sha256sum "$first" | cut -d ' ' -f 1
+}
+
+compare_artifact "backend wheel" "$backend_relative"
+compare_artifact "frontend package" "$frontend_relative"
+compare_artifact "OCP bundle" "$bundle_relative"
+
+for build in "$build_a" "$build_b"; do
+  (
+    cd "$(dirname "$build/$bundle_relative")"
+    sha256sum -c "$(basename "$bundle_relative").sha256"
+  )
+done
+
+mkdir -p "$(dirname "$output")"
+cp "$build_a/$bundle_relative" "$output"
+(
+  cd "$(dirname "$output")"
+  sha256sum "$(basename "$output")" > "$(basename "$output").sha256"
+)
+
+(
+  cd "$(dirname "$output")"
+  sha256sum -c "$(basename "$output").sha256"
+)
+"$metadata_python" "$repo_root/scripts/release_metadata.py" \
+  --verify-bundle "$output" \
+  --source-commit "$source_commit"
+echo "Reproducible bundle verified for $source_commit: $output"

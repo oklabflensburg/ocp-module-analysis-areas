@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 
 import yaml
+from scripts.release_metadata import load_release_metadata
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "backend/src/ocp_module_analysis_areas"
@@ -40,15 +41,12 @@ def _imports(path: Path) -> set[str]:
 
 def test_manifest_and_package_versions_are_consistent() -> None:
     manifest = yaml.safe_load((ROOT / "module.yaml").read_text(encoding="utf-8"))
-    pyproject = (ROOT / "backend/pyproject.toml").read_text(encoding="utf-8")
+    release = load_release_metadata(ROOT, tag=f"v{manifest['version']}")
     frontend = json.loads((ROOT / "frontend/module.json").read_text(encoding="utf-8"))
-    package = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))
     assert manifest["id"] == frontend["id"] == frontend["backendModuleId"] == "analysis-areas"
-    assert manifest["version"] == frontend["version"] == package["version"] == "1.5.0"
-    assert 'name = "ocp-module-analysis-areas"' in pyproject
-    assert 'version = "1.5.0"' in pyproject
-    assert manifest["backend"]["package"] == "ocp-module-analysis-areas"
-    assert manifest["frontend"]["package"] == "@open-city-planner/analysis-areas"
+    assert release.version == manifest["version"]
+    assert release.backend_package == "ocp-module-analysis-areas"
+    assert release.frontend_package == "@open-city-planner/analysis-areas"
     assert manifest["requires"]["sdk"] == ">=1.15.0,<2.0.0"
     assert manifest["requires"]["modules"] == {"statistics": ">=0.2.0,<1.0.0"}
     assert manifest["persistence"]["migrations"] is True
@@ -82,7 +80,7 @@ def test_host_contract_is_exact_sdk_1_15_prerequisite() -> None:
     )
     assert contract == {
         "repository": "https://github.com/oklabflensburg/open-city-planner.git",
-        "commit": "6e78bf72f16343c9c29ce8eeeeff8bbf45115bb2",
+        "commit": "f99ca70131fa3787d618c89d8a09ea6d64a74286",
         "source_branch": "staging/epic-91-modular-host",
         "sdk_version": "1.15.0",
         "host_version": "0.2.0",
@@ -161,19 +159,20 @@ def test_historical_revision_ids_and_chain_links_are_immutable() -> None:
 
 
 def test_built_wheel_has_one_namespace_entry_point_and_migrations() -> None:
-    wheels = list((ROOT / "backend/dist").glob("*.whl"))
-    if not wheels:
+    release = load_release_metadata(ROOT)
+    wheel = ROOT / release.backend_artifact
+    if not wheel.exists():
         return
-    assert len(wheels) == 1
-    with zipfile.ZipFile(wheels[0]) as archive:
+    dist_info = f"ocp_module_analysis_areas-{release.version}.dist-info"
+    with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         roots = {name.split("/", 1)[0] for name in names}
         assert roots == {
             "ocp_module_analysis_areas",
-            "ocp_module_analysis_areas-1.5.0.dist-info",
+            dist_info,
         }
         entry_points = archive.read(
-            "ocp_module_analysis_areas-1.5.0.dist-info/entry_points.txt"
+            f"{dist_info}/entry_points.txt"
         ).decode()
         assert "[open_city_planner.modules]" in entry_points
         assert "analysis-areas = ocp_module_analysis_areas.module:DEFINITION" in entry_points
