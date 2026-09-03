@@ -159,13 +159,12 @@ def test_historical_revision_ids_and_chain_links_are_immutable() -> None:
 
 
 def test_built_wheel_has_one_namespace_entry_point_and_migrations() -> None:
-    wheels = list((ROOT / "backend/dist").glob("*.whl"))
-    if not wheels:
-        return
-    assert len(wheels) == 1
     release = load_release_metadata(ROOT)
+    wheel = ROOT / release.backend_artifact
+    if not wheel.exists():
+        return
     dist_info = f"ocp_module_analysis_areas-{release.version}.dist-info"
-    with zipfile.ZipFile(wheels[0]) as archive:
+    with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
         roots = {name.split("/", 1)[0] for name in names}
         assert roots == {

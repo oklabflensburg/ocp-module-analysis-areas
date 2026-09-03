@@ -26,25 +26,33 @@ def _release_fixture(tmp_path: Path) -> Path:
 
 
 def test_release_metadata_accepts_the_canonical_release() -> None:
-    metadata = load_release_metadata(ROOT, tag="v1.5.0")
+    metadata = load_release_metadata(ROOT)
+    tagged = load_release_metadata(ROOT, tag=f"v{metadata.version}")
+    wheel_distribution = metadata.backend_package.replace("-", "_")
+    assert tagged == metadata
     assert metadata.backend_artifact.endswith(
-        "/ocp_module_analysis_areas-1.5.0-py3-none-any.whl"
+        f"/{wheel_distribution}-{metadata.version}-py3-none-any.whl"
     )
-    assert metadata.frontend_artifact.endswith("/analysis-areas-1.5.0.tgz")
-    assert metadata.bundle_artifact == "dist/analysis-areas-1.5.0.ocp"
+    assert metadata.frontend_artifact.endswith(
+        f"/{metadata.module_id}-{metadata.version}.tgz"
+    )
+    assert metadata.bundle_artifact == (
+        f"dist/{metadata.module_id}-{metadata.version}.ocp"
+    )
 
 
 def test_release_metadata_reports_a_version_mismatch(tmp_path: Path) -> None:
     root = _release_fixture(tmp_path)
     package_path = root / "frontend/package.json"
     package = json.loads(package_path.read_text(encoding="utf-8"))
-    package["version"] = "1.5.1"
+    package["version"] = "99.99.99"
     package_path.write_text(json.dumps(package), encoding="utf-8")
 
     with pytest.raises(ReleaseMetadataError, match="frontend package version"):
-        load_release_metadata(root, tag="v1.5.0")
+        load_release_metadata(root)
 
 
 def test_release_metadata_reports_a_tag_mismatch() -> None:
+    metadata = load_release_metadata(ROOT)
     with pytest.raises(ReleaseMetadataError, match="release tag"):
-        load_release_metadata(ROOT, tag="v1.5.1")
+        load_release_metadata(ROOT, tag=f"v{metadata.version}-mismatch")
