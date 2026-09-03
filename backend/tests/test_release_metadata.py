@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import json
 import shutil
+import zipfile
 from pathlib import Path
 
 import pytest
-from scripts.release_metadata import ReleaseMetadataError, load_release_metadata
+import yaml
+from scripts.release_metadata import (
+    BUNDLE_FORMAT_VERSION,
+    ReleaseMetadataError,
+    load_release_metadata,
+    verify_bundle,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -56,3 +63,51 @@ def test_release_metadata_reports_a_tag_mismatch() -> None:
     metadata = load_release_metadata(ROOT)
     with pytest.raises(ReleaseMetadataError, match="release tag"):
         load_release_metadata(ROOT, tag=f"v{metadata.version}-mismatch")
+
+
+def test_release_metadata_validates_embedded_bundle_metadata(tmp_path: Path) -> None:
+    metadata = load_release_metadata(ROOT)
+    source_commit = "a" * 40
+    bundle = tmp_path / Path(metadata.bundle_artifact).name
+    backend = metadata.backend_artifact.replace("backend/dist/", "backend/")
+    frontend = metadata.frontend_artifact.replace("frontend/dist/", "frontend/")
+    descriptor = {
+        "bundle_format_version": BUNDLE_FORMAT_VERSION,
+        "module_id": metadata.module_id,
+        "version": metadata.version,
+        "publisher": "oklabflensburg",
+        "source": {
+            "type": "local",
+            "reference": f"releases/{metadata.module_id}/{metadata.version}",
+        },
+        "provenance": {
+            "source_commit": source_commit,
+            "source_tag": f"v{metadata.version}",
+        },
+        "manifest": {"version": metadata.version},
+        "backend": {"artifact": backend},
+        "frontend": {"artifact": frontend},
+    }
+    with zipfile.ZipFile(bundle, "w") as archive:
+        archive.writestr("module.yaml", yaml.safe_dump(descriptor))
+        archive.writestr("checksums.json", "{}")
+        archive.writestr(backend, b"wheel")
+        archive.writestr(frontend, b"frontend")
+
+    verify_bundle(bundle, metadata, source_commit)
+
+    wrong_name = bundle.with_name("wrong.ocp")
+    shutil.copy2(bundle, wrong_name)
+    with pytest.raises(ReleaseMetadataError, match="bundle artifact name"):
+        verify_bundle(wrong_name, metadata, source_commit)
+
+    invalid_format = tmp_path / "invalid-format" / bundle.name
+    invalid_format.parent.mkdir()
+    descriptor["bundle_format_version"] = BUNDLE_FORMAT_VERSION + 1
+    with zipfile.ZipFile(invalid_format, "w") as archive:
+        archive.writestr("module.yaml", yaml.safe_dump(descriptor))
+        archive.writestr("checksums.json", "{}")
+        archive.writestr(backend, b"wheel")
+        archive.writestr(frontend, b"frontend")
+    with pytest.raises(ReleaseMetadataError, match="bundle format version"):
+        verify_bundle(invalid_format, metadata, source_commit)

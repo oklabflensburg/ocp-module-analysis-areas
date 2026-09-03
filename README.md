@@ -42,13 +42,25 @@ Prepare and test the exact host contract:
 
 ```bash
 scripts/prepare-host-contract
-scripts/build-bundle
+scripts/verify-reproducible-bundle
 scripts/host-contract-test
 ```
 
 The resulting files are `dist/analysis-areas-1.5.1.ocp` and its `.sha256`.
 The `.ocp` is built by the pinned host's v1 builder, not by repository-local ZIP
 code.
+
+The reproducibility check creates two empty source staging trees from the same Git
+commit. Each tree independently builds its backend wheel, frontend TGZ, OCP bundle
+and checksum. Wheel, TGZ and bundle bytes are compared separately before one checked
+bundle is copied to `dist/`. This proves a complete reproducible source build, not
+only deterministic assembly of an outer OCP container.
+
+The pinned Host verifier checks the outer container and payload checksums during the
+lifecycle test. `scripts/release_metadata.py` separately checks the embedded module
+ID, version, bundle format, component names, publisher and source provenance.
+`scripts/build-bundle` remains available for a single complete local build; it is not
+by itself the two-build reproducibility proof.
 
 ## Wikidata operations
 

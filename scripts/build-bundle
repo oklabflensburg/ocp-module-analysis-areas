@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 host_root="${OCP_HOST_CHECKOUT:-$repo_root/.host-contract}"
 host_python="$host_root/backend/.venv/bin/python"
 metadata_python="$repo_root/backend/.venv/bin/python"
+build_root="$(realpath -m "${OCP_BUILD_ROOT:-$repo_root}")"
+source_commit="${SOURCE_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}"
 
 if [[ ! -x "$host_python" ]]; then
   echo "Pinned host environment missing at $host_root; run scripts/prepare-host-contract first." >&2
@@ -15,12 +17,6 @@ if [[ ! -x "$metadata_python" ]]; then
   exit 1
 fi
 
-version="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --field version)"
-backend_artifact="$repo_root/backend/dist/ocp_module_analysis_areas-${version}-py3-none-any.whl"
-frontend_artifact="$repo_root/frontend/dist/analysis-areas-${version}.tgz"
-output="${BUNDLE_OUTPUT:-$repo_root/dist/analysis-areas-${version}.ocp}"
-checksum="${output}.sha256"
-
 expected="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$repo_root/.github/ocp-host-contract.json")"
 actual="$(git -C "$host_root" rev-parse HEAD)"
 if [[ "$actual" != "$expected" ]]; then
@@ -28,24 +24,53 @@ if [[ "$actual" != "$expected" ]]; then
   exit 1
 fi
 
-source_commit="${SOURCE_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}"
 source_epoch="$(git -C "$repo_root" show -s --format=%ct "$source_commit")"
+source_root="$repo_root"
+if [[ "$build_root" != "$repo_root" ]]; then
+  if [[ -d "$build_root" ]] && [[ -n "$(find "$build_root" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    echo "Isolated build root must be empty: $build_root" >&2
+    exit 1
+  fi
+  mkdir -p "$build_root"
+  git -C "$repo_root" archive "$source_commit" -- module.yaml backend frontend \
+    | tar -x -C "$build_root"
+  source_root="$build_root"
+elif ! git -C "$repo_root" diff --quiet "$source_commit" -- module.yaml backend frontend; then
+  echo "Tracked release sources differ from SOURCE_COMMIT $source_commit." >&2
+  exit 1
+fi
+
+version="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --repo-root "$source_root" --field version)"
+module_id="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --repo-root "$source_root" --field module_id)"
+backend_relative="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --repo-root "$source_root" --field backend_artifact)"
+frontend_relative="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --repo-root "$source_root" --field frontend_artifact)"
+bundle_relative="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --repo-root "$source_root" --field bundle_artifact)"
+backend_artifact="$build_root/$backend_relative"
+frontend_artifact="$build_root/$frontend_relative"
+output="${BUNDLE_OUTPUT:-$build_root/$bundle_relative}"
+checksum="${output}.sha256"
+
 mkdir -p "$(dirname "$output")"
 rm -f "$output" "$checksum"
 
-if [[ "${OCP_SKIP_PACKAGE_BUILD:-0}" != "1" ]]; then
-  # Setuptools otherwise reuses removed package files from a previous build/lib tree.
-  rm -rf "$repo_root/backend/build"
-  rm -f "$backend_artifact" "$frontend_artifact"
+# Setuptools otherwise reuses removed package files from a previous build/lib tree.
+rm -rf "$source_root/backend/build"
+rm -f "$backend_artifact" "$frontend_artifact"
+(
+  cd "$source_root/backend"
+  SOURCE_DATE_EPOCH="$source_epoch" uv build --wheel --clear \
+    --out-dir "$(dirname "$backend_artifact")"
+)
+if [[ "$source_root" != "$repo_root" ]]; then
   (
-    cd "$repo_root/backend"
-    SOURCE_DATE_EPOCH="$source_epoch" uv build --wheel --clear
-  )
-  (
-    cd "$repo_root/frontend"
-    corepack pnpm build
+    cd "$source_root/frontend"
+    CI=true corepack pnpm install --frozen-lockfile --offline
   )
 fi
+(
+  cd "$source_root/frontend"
+  OCP_FRONTEND_OUTPUT="$frontend_artifact" corepack pnpm build
+)
 for artifact in "$backend_artifact" "$frontend_artifact"; do
   if [[ ! -f "$artifact" ]]; then
     echo "Validated release input is missing: $artifact" >&2
@@ -55,11 +80,11 @@ done
 (
   cd "$host_root/backend"
   "$host_python" -m app.cli.modules bundle build \
-    --manifest "$repo_root/module.yaml" \
+    --manifest "$source_root/module.yaml" \
     --backend "$backend_artifact" \
     --frontend "$frontend_artifact" \
     --publisher oklabflensburg \
-    --source-reference "releases/analysis-areas/$version" \
+    --source-reference "releases/$module_id/$version" \
     --source-repository https://github.com/oklabflensburg/ocp-module-analysis-areas \
     --source-commit "$source_commit" \
     --source-tag "v$version" \

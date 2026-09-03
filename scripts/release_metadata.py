@@ -16,6 +16,7 @@ import tomllib
 import yaml
 
 SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$")
+BUNDLE_FORMAT_VERSION = 1
 
 
 class ReleaseMetadataError(ValueError):
@@ -48,7 +49,7 @@ def _module_manifest(path: Path) -> dict[str, object]:
     raise ReleaseMetadataError(f"Could not find a literal MANIFEST definition in {path}")
 
 
-def _require_equal(label: str, actual: object, expected: str) -> None:
+def _require_equal(label: str, actual: object, expected: object) -> None:
     if actual != expected:
         raise ReleaseMetadataError(f"{label} must be {expected!r}, got {actual!r}")
 
@@ -112,6 +113,7 @@ def verify_bundle(path: Path, metadata: ReleaseMetadata, source_commit: str) -> 
         metadata.backend_artifact.replace("backend/dist/", "backend/"),
         metadata.frontend_artifact.replace("frontend/dist/", "frontend/"),
     }
+    _require_equal("bundle artifact name", path.name, Path(metadata.bundle_artifact).name)
     with zipfile.ZipFile(path) as archive:
         members = set(archive.namelist())
         if members != expected_members:
@@ -120,6 +122,10 @@ def verify_bundle(path: Path, metadata: ReleaseMetadata, source_commit: str) -> 
             )
         bundled = yaml.safe_load(archive.read("module.yaml"))
     expected = {
+        "bundle format version": (
+            bundled.get("bundle_format_version"),
+            BUNDLE_FORMAT_VERSION,
+        ),
         "module id": (bundled.get("module_id"), metadata.module_id),
         "bundle version": (bundled.get("version"), metadata.version),
         "manifest version": (bundled.get("manifest", {}).get("version"), metadata.version),
@@ -135,6 +141,14 @@ def verify_bundle(path: Path, metadata: ReleaseMetadata, source_commit: str) -> 
         "source tag": (
             bundled.get("provenance", {}).get("source_tag"),
             f"v{metadata.version}",
+        ),
+        "backend component": (
+            bundled.get("backend", {}).get("artifact"),
+            metadata.backend_artifact.replace("backend/dist/", "backend/"),
+        ),
+        "frontend component": (
+            bundled.get("frontend", {}).get("artifact"),
+            metadata.frontend_artifact.replace("frontend/dist/", "frontend/"),
         ),
     }
     for label, (actual, wanted) in expected.items():
