@@ -53,9 +53,9 @@ FROM analysis_areas area LEFT JOIN analysis_areas parent ON parent.id=area.paren
 
 
 AREA_SPATIAL_SNAPSHOT_SQL = text("""
-SELECT ST_AsEWKB(geometry), ST_XMin(ST_Box3D(geometry)),
-  ST_YMin(ST_Box3D(geometry)), ST_XMax(ST_Box3D(geometry)),
-  ST_YMax(ST_Box3D(geometry))
+SELECT ST_AsEWKB(geometry), ST_XMin(Box3D(geometry)),
+  ST_YMin(Box3D(geometry)), ST_XMax(Box3D(geometry)),
+  ST_YMax(Box3D(geometry))
 FROM analysis_areas WHERE id=:id
 """)
 
