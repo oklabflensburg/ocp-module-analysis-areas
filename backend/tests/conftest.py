@@ -7,8 +7,12 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from types import ModuleType
 from uuid import UUID
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 
 try:
     import app.platform.modules.sdk  # noqa: F401

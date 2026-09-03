@@ -48,10 +48,6 @@ jobs:
           fetch-depth: 0
       - name: Resolve release tag
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release tag: $RELEASE_TAG" >&2
-            exit 1
-          fi
           source_commit=$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")
           test "$(git rev-parse HEAD)" = "$source_commit"
           echo "SOURCE_COMMIT=$source_commit" >> "$GITHUB_ENV"
@@ -81,12 +77,10 @@ jobs:
       - run: uv sync --frozen --extra dev
         working-directory: backend
       - name: Validate tag and version
-        run: |
-          version=$(cd backend && uv run python -c 'import yaml; print(yaml.safe_load(open("../module.yaml"))["version"])')
-          test "$RELEASE_TAG" = "v$version"
+        run: backend/.venv/bin/python scripts/release_metadata.py --tag "$RELEASE_TAG" --github-env "$GITHUB_ENV"
       - run: uv run ruff check src tests && uv run pytest
         working-directory: backend
-      - run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm test
+      - run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm test && pnpm contract:check
         working-directory: frontend
       - run: uv sync --frozen --extra dev
         working-directory: .host-contract/backend
@@ -96,11 +90,13 @@ jobs:
         working-directory: .statistics-module/backend
       - run: pnpm install --frozen-lockfile
         working-directory: .statistics-module/frontend
-      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" scripts/build-bundle
+      - name: Prepare Statistics 0.2.0 build contract
+        run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.statistics-host-contract" scripts/prepare-host-contract
         working-directory: .statistics-module
-      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" SOURCE_COMMIT="$SOURCE_COMMIT" scripts/build-bundle
+      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.statistics-host-contract" scripts/build-bundle
+        working-directory: .statistics-module
+      - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" SOURCE_COMMIT="$SOURCE_COMMIT" scripts/verify-reproducible-bundle
       - run: OCP_HOST_CHECKOUT="$GITHUB_WORKSPACE/.host-contract" OCP_STATISTICS_BUNDLE="$GITHUB_WORKSPACE/.statistics-module/dist/statistics-0.2.0.ocp" scripts/host-contract-test
-      - run: sha256sum -c dist/analysis-areas-1.5.0.ocp.sha256
       - name: Publish immutable release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -109,9 +105,14 @@ jobs:
             echo "Release $RELEASE_TAG already exists; refusing mutation." >&2
             exit 1
           fi
+          notes_file="docs/releases/${RELEASE_TAG}.md"
+          if [[ ! -f "$notes_file" ]]; then
+            echo "Versioned release notes are missing: $notes_file" >&2
+            exit 1
+          fi
           gh release create "$RELEASE_TAG" \
-            dist/analysis-areas-1.5.0.ocp \
-            dist/analysis-areas-1.5.0.ocp.sha256 \
+            "$BUNDLE_ARTIFACT" \
+            "$BUNDLE_CHECKSUM" \
             --verify-tag \
             --title "$RELEASE_TAG" \
-            --notes "First standalone release extracted from Open City Planner built-in module"
+            --notes-file "$notes_file"

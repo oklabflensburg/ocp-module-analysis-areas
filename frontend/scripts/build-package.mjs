@@ -1,11 +1,16 @@
-import { cp, lstat, mkdir, mkdtemp, readdir, rename, rm } from 'node:fs/promises'
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const output = path.join(root, 'dist', 'analysis-areas-1.5.0.tgz')
+const packageMetadata = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+const moduleMetadata = JSON.parse(await readFile(path.join(root, 'module.json'), 'utf8'))
+if (packageMetadata.version !== moduleMetadata.version) {
+  throw new Error(`Package/module version mismatch: ${packageMetadata.version} != ${moduleMetadata.version}`)
+}
+const output = path.join(root, 'dist', `${moduleMetadata.id}-${moduleMetadata.version}.tgz`)
 await rm(path.join(root, 'dist'), { recursive: true, force: true })
 await mkdir(path.dirname(output), { recursive: true })
 const staging = await mkdtemp(path.join(os.tmpdir(), 'analysis-areas-frontend-'))

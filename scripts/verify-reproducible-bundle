@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+metadata_python="$repo_root/backend/.venv/bin/python"
+version="$("$metadata_python" "$repo_root/scripts/release_metadata.py" --field version)"
+source_commit="${SOURCE_COMMIT:-$(git -C "$repo_root" rev-parse HEAD)}"
+output="${BUNDLE_OUTPUT:-$repo_root/dist/analysis-areas-${version}.ocp}"
+comparison_root="$(mktemp -d)"
+comparison="$comparison_root/analysis-areas-${version}.ocp"
+trap 'rm -rf "$comparison_root"' EXIT
+
+BUNDLE_OUTPUT="$output" SOURCE_COMMIT="$source_commit" "$repo_root/scripts/build-bundle"
+OCP_SKIP_PACKAGE_BUILD=1 BUNDLE_OUTPUT="$comparison" SOURCE_COMMIT="$source_commit" \
+  "$repo_root/scripts/build-bundle"
+
+if ! cmp --silent "$output" "$comparison"; then
+  echo "Reproducibility check failed: bundles built from $source_commit differ." >&2
+  sha256sum "$output" "$comparison" >&2
+  exit 1
+fi
+
+(
+  cd "$(dirname "$output")"
+  sha256sum -c "$(basename "$output").sha256"
+)
+"$metadata_python" "$repo_root/scripts/release_metadata.py" \
+  --verify-bundle "$output" \
+  --source-commit "$source_commit"
+echo "Reproducible bundle verified for $source_commit: $output"

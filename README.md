@@ -78,8 +78,9 @@ frontend package, tables and packaged migration history.
 
 `scripts/host-contract-test` uses the normal Host CLI, installer, first-party and
 entry-point discovery, generated `modules env`, frontend discovery, typecheck and
-production build. Only the four duplicate Host Alembic files
-are omitted from an isolated test copy for the exclusive-ownership graph check.
+production build. It requires the built-in-free Host to contain none of the four
+adopted Analysis Areas migration files and verifies their exclusive discovery from
+the installed module.
 
 ## Compatibility
 
@@ -102,8 +103,8 @@ Existing Alembic IDs and their host-chain `down_revision` links are not renamed.
 The module declares all four IDs explicitly through the SDK adoption contract;
 future migrations must use `mod_analysis_areas_*` and extend the then-current
 global head. No baseline table creation, graph rewrite, or data copy was introduced.
-The lifecycle test removes duplicate built-in migration sources only in its
-isolated cutover copy and validates passive discovery while installation is disabled.
+The lifecycle test validates exclusive passive migration discovery while installation
+is disabled; it does not rewrite the built-in-free Host migration graph.
 
 Detailed evidence:
 
