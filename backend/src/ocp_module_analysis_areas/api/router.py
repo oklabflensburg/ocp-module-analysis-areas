@@ -2,7 +2,6 @@
 
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import asdict
 from typing import Annotated, NoReturn
 
 from app.platform.modules.sdk import (
@@ -46,7 +45,11 @@ from .schemas import (
     AreaStatisticSeriesRead,
     AreaStatisticsRead,
 )
-from .statistics import statistics_selection
+from .statistics import (
+    area_statistic_series_read,
+    area_statistics_read,
+    statistics_selection,
+)
 
 ANALYTICS_TIMEOUT_DETAIL = {
     "error": {
@@ -225,7 +228,7 @@ def create_router(
         result = await statistics.for_selection(session, statistics_selection(area))
         if result is None:
             raise HTTPException(404, "Das Gebiet wurde nicht gefunden.")
-        return AreaStatisticsRead.model_validate(asdict(result))
+        return area_statistics_read(result)
 
     @router.get(
         "/by-slug/{slug}/statistics/{metric_key}",
@@ -245,7 +248,7 @@ def create_router(
         )
         if result is None:
             raise HTTPException(404, "Die Gebietsstatistik wurde nicht gefunden.")
-        return AreaStatisticSeriesRead.model_validate(asdict(result))
+        return area_statistic_series_read(result)
 
     @router.get("/{area_id}", response_model=AnalysisAreaRead, summary="Analysegebiet per ID laden")
     async def get_area(area_id: uuid.UUID, session: SessionDep) -> AnalysisAreaRead:

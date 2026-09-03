@@ -546,9 +546,9 @@ def main() -> None:
             cwd=cutover_backend,
             environment=enabled,
         )
-        # Two characterization, two PostGIS sync, one Analytics, and one Statistics test run.
+        # Two characterization, two PostGIS sync, one Analytics, and two Statistics tests.
         assert "skipped" not in sync_contract.stdout, sync_contract.stdout
-        assert "6 passed" in sync_contract.stdout, sync_contract.stdout
+        assert "7 passed" in sync_contract.stdout, sync_contract.stdout
         frontend_output = frontend_check(cutover_frontend, enabled)
         assert "analysis-areas" in frontend_output
         installed_frontend_root = next(
@@ -628,7 +628,7 @@ def main() -> None:
             "wikidata job/service/capability present; OSM/polygon/Statistics services resolved; "
             "OSM subscriber dispatched; real PostGIS spatial-match/identity/relation/"
             "upsert/generation chain and Analytics Box3D HTTP path; "
-            "real PostgreSQL Statistics selection/comparison/series/missing cases; "
+            "real PostgreSQL Statistics selection/comparison/series/missing cases and HTTP path; "
             "backend/API characterization and frontend route/map discovery; "
             "built-in-free detail-map ownership and social-preview ready wiring; "
             "modules:check; typecheck; build; "
