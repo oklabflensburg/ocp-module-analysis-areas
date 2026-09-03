@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "analysis-areas",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "backendModuleId": "analysis-areas",
   "compatibility": {
     "host": ">=1.0.0 <2.0.0",
