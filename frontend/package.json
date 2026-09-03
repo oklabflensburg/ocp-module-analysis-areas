@@ -1,6 +1,6 @@
 {
   "name": "@open-city-planner/analysis-areas",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Analysis Areas Nuxt layer for Open City Planner",
   "license": "AGPL-3.0-only",
   "type": "module",

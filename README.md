@@ -4,7 +4,7 @@ Standalone full-stack OCP module extracted from the built-in
 `analysis-areas` module in
 [`oklabflensburg/open-city-planner`](https://github.com/oklabflensburg/open-city-planner).
 
-Version `1.5.2` consumes the required Statistics query service through the public
+Version `1.5.3` consumes the required Statistics query service through the public
 service registry and targets Module SDK `>=1.15.0,<2.0.0`. This repository is the
 source of truth; the Slim Host contains no built-in Analysis Areas runtime.
 
@@ -46,7 +46,7 @@ scripts/verify-reproducible-bundle
 scripts/host-contract-test
 ```
 
-The resulting files are `dist/analysis-areas-1.5.2.ocp` and its `.sha256`.
+The resulting files are `dist/analysis-areas-1.5.3.ocp` and its `.sha256`.
 The `.ocp` is built by the pinned host's v1 builder, not by repository-local ZIP
 code.
 
@@ -80,8 +80,8 @@ Install Statistics first, then install Analysis Areas:
 
 ```bash
 cd open-city-planner/backend
-uv run python -m app.cli.modules verify analysis-areas-1.5.2.ocp
-uv run python -m app.cli.modules install analysis-areas-1.5.2.ocp
+uv run python -m app.cli.modules verify analysis-areas-1.5.3.ocp
+uv run python -m app.cli.modules install analysis-areas-1.5.3.ocp
 uv run python -m app.cli.modules enable analysis-areas
 ```
 

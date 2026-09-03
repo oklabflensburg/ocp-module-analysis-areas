@@ -6,9 +6,12 @@ The real SDK is exercised by scripts/host-contract-test against the pinned Host.
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,6 +124,56 @@ except ModuleNotFoundError:
         municipality: StatisticsArea
         inherited: bool = False
 
+    @dataclass(frozen=True, slots=True)
+    class StatisticsSource:
+        name: str
+        url: str
+        license: str
+        source_updated_at: datetime | None
+        last_import_at: datetime | None
+
+    @dataclass(frozen=True, slots=True)
+    class StatisticValue:
+        key: str
+        name: str
+        category: str
+        value: Decimal | None
+        unit: str
+        period: str
+        period_start: date
+        area_level: str
+        is_calculated: bool
+        municipality_value: Decimal | None = None
+        difference: Decimal | None = None
+        relative_difference: Decimal | None = None
+
+    @dataclass(frozen=True, slots=True)
+    class AreaStatistics:
+        area: StatisticsArea
+        statistics_area: StatisticsArea
+        inherited_from_parent: bool
+        source: StatisticsSource | None
+        latest: tuple[StatisticValue, ...] = ()
+
+    @dataclass(frozen=True, slots=True)
+    class StatisticSeriesPoint:
+        period: str
+        period_start: date
+        value: Decimal | None
+        suppressed: bool
+
+    @dataclass(frozen=True, slots=True)
+    class AreaStatisticSeries:
+        area: StatisticsArea
+        statistics_area: StatisticsArea
+        inherited_from_parent: bool
+        source: StatisticsSource | None
+        metric: Mapping[str, str]
+        series: tuple[StatisticSeriesPoint, ...] = ()
+
+        def __post_init__(self) -> None:
+            object.__setattr__(self, "metric", MappingProxyType(dict(self.metric)))
+
     for name in (
         "CachePort",
         "CacheGenerationPort",
@@ -150,6 +203,11 @@ except ModuleNotFoundError:
     sdk_module.PolygonSpatialMatchResult = PolygonSpatialMatchResult
     sdk_module.StatisticsArea = StatisticsArea
     sdk_module.StatisticsSelection = StatisticsSelection
+    sdk_module.StatisticsSource = StatisticsSource
+    sdk_module.StatisticValue = StatisticValue
+    sdk_module.AreaStatistics = AreaStatistics
+    sdk_module.StatisticSeriesPoint = StatisticSeriesPoint
+    sdk_module.AreaStatisticSeries = AreaStatisticSeries
     sdk_module.STATISTICS_QUERY_SERVICE_ID = "statistics.query"
     sdk_module.STATISTICS_QUERY_SERVICE_VERSION = 1
     sys.modules.update(
