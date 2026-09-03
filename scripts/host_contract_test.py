@@ -334,16 +334,6 @@ def main() -> None:
         with staged_ocp_bundle(bundle) as (_package_root, package):
             assert verified_package["bundle_sha256"] == package.bundle_sha256
 
-        installed_result = cli(
-            bundle_python,
-            cutover_backend,
-            install_root,
-            base_environment,
-            "install",
-            str(bundle),
-        )
-        installed = json_output(installed_result)
-        assert installed["enabled"] is False
         statistics_installed = json_output(
             cli(
                 bundle_python,
@@ -356,6 +346,16 @@ def main() -> None:
         )
         assert statistics_installed["id"] == "statistics"
         assert statistics_installed["enabled"] is False
+        installed_result = cli(
+            bundle_python,
+            cutover_backend,
+            install_root,
+            base_environment,
+            "install",
+            str(bundle),
+        )
+        installed = json_output(installed_result)
+        assert installed["enabled"] is False
         disabled_environment = generated_environment(
             bundle_python, cutover_backend, install_root, base_environment
         )
